@@ -1,0 +1,1250 @@
+---
+title: "Bayesian Hierarchical Drug-Response Model: Gibbs Sampler"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+This notebook implements and validates the Gibbs sampler for the
+network-structured horseshoe drug-response model (Section 4 of
+`pathway.tex`), in four parts:
+
+1. **Sampler functions** -- the model implementation itself (every full
+   conditional is Normal or Inverse-Gamma; there is no
+   Metropolis-Hastings step anywhere).
+2. **Simulation-based calibration** -- validates the sampler on data with
+   a known true answer, *before* trusting it on real data. This step
+   previously caught a genuine model-degeneracy bug (see the writeup in
+   Section 6 below); it is kept in this notebook rather than removed, so
+   the same check reruns automatically if you ever modify the model.
+3. **Real-data run** -- runs the validated sampler on your actual
+   `mutation_matrix.csv` / `response_matrix.csv` /
+   `pathway_adjacency_W.csv` files, using **multiple independent chains**
+   so the diagnostics in Part 4 (which require $\geq 2$ chains, e.g.
+   Gelman-Rubin) can be computed.
+4. **MCMC diagnostics** -- Gelman-Rubin $\hat R$ (across chains),
+   effective sample size (ESS), and the Geweke diagnostic (within each
+   chain), with an automatic flagging table so you don't have to eyeball
+   hundreds of parameters by hand. Calibration on simulated data
+   (Part 2) checks whether the *posterior* is right given enough samples;
+   these diagnostics check whether the *chain itself* is behaving like a
+   converged, well-mixing sample in the first place -- a different
+   question, not previously checked in this notebook, and one that
+   matters here in particular because of a known correlated gene cluster
+   in the real data (see the project progress log's multicollinearity
+   diagnostic) that could plausibly slow mixing for the genes involved.
+
+**Performance note:** an earlier version of this sampler took an
+estimated 13 hours for a full run (295 drugs x 4000 iterations) on the
+real data. Two optimizations -- precomputing the per-drug data crossproduct
+once instead of recomputing it every iteration, and using a single
+Cholesky factorization instead of a full matrix inverse followed by a
+second decomposition -- brought this down to roughly 45 minutes to 1.1
+hours at 1500--2000 iterations on real data dimensions (951 models, 219
+genes, 295 drugs), benchmarked directly rather than estimated. See the
+comments inside `gibbs_sampler()` below for exactly where and why. Running
+multiple chains (Part 3) multiplies this runtime by the number of chains,
+so plan accordingly -- see the MCMC Settings chunk in Part 3 for the
+exact numbers used.
+
+Run the chunks in order: Part 1 defines functions (fast), Part 2 runs a
+calibration check (a few minutes), Part 3 runs on real data (time depends
+on your iteration settings -- a short test setting is provided first),
+Part 4 runs diagnostics on whatever Part 3 produced.
+
+---
+
+# Part 1: Sampler Functions
+
+**Model correction note (read before using):** the original model
+specification gave both $\kappa_d^2$ (network smoothness) and $\zeta_d^2$
+(horseshoe global shrinkage) near-improper Inverse-Gamma(0.01, 0.01)
+priors directly. On real data, this caused both to collapse toward zero
+in a self-reinforcing feedback loop -- a known pathology for variance
+components in hierarchical models (Gelman 2006), worsened here because
+both parameters govern the *same* coefficient vector via the *same*
+distributional family, giving them no structural reason to disagree. The
+fix, adapted from the Group Inverse-Gamma Gamma (GIGG) prior (Boss,
+Datta, Wang, Park, Kang & Mukherjee 2021), breaks this symmetry: each
+global parameter's *precision* ($1/\kappa_d^2$, $1/\zeta_d^2$) is now
+drawn from a **Gamma** distribution instead, while the *local* horseshoe
+parameter $\lambda_{gd}$ keeps its original Inverse-Gamma structure --
+exactly the asymmetry GIGG prescribes between group-level and
+local-level shrinkage. This was verified analytically, confirmed
+numerically against a directly grid-evaluated posterior, and validated
+on real data: both parameters now stabilize at sensible values, genes
+with strong signal (e.g. TP53) recover well-behaved posteriors instead of
+collapsing to zero, and genuinely data-sparse genes (e.g. CAMTA1, 10 of
+951 cell lines mutated) correctly retain wide, honest uncertainty rather
+than an artificially tight or artificially unshrunk estimate. Full
+derivation and diagnostic trace are in the project progress log.
+
+```{r libraries}
+suppressWarnings(suppressMessages({
+  library(Matrix)
+}))
+
+# coda provides the standard implementations of Gelman-Rubin (gelman.diag),
+# effective sample size (effectiveSize), and the Geweke diagnostic
+# (geweke.diag) used in Part 4 -- these are not reimplemented here, since
+# coda's versions are the standard, widely-checked reference
+# implementations in R.
+if (!requireNamespace("coda", quietly = TRUE)) {
+  install.packages("coda", repos = "https://cloud.r-project.org")
+}
+suppressWarnings(suppressMessages({
+  library(coda)
+}))
+```
+
+```{r rinvgamma}
+# R has no built-in Inverse-Gamma sampler without an extra package;
+# implemented directly from rgamma to avoid an additional dependency,
+# since IG(a, b) <=> 1 / Gamma(a, rate = b).
+rinvgamma <- function(n, shape, rate) {
+  1 / rgamma(n, shape = shape, rate = rate)
+}
+```
+
+
+```{r gibbs-sampler-function}
+gibbs_sampler <- function(y, M, group, W, delta = 0.5,
+                           use_group_layer = TRUE,
+                           use_network_layer = TRUE,
+                           use_horseshoe_layer = TRUE,
+                           flat_prior_var = 100,
+                           n_iter = 4000, burn_in = 2000, thin = 2,
+                           verbose = 200, seed = 1,
+                           gigg_a = 1, gigg_b = 1) {
+  # gigg_a, gigg_b: shape/rate hyperparameters for the Gamma prior on the
+  # precision of each GLOBAL shrinkage parameter (1/kappa2_d, 1/zeta2_d).
+  # Gamma(1,1) is the default used during validation on real data (see
+  # project progress log); both parameters stabilized at sensible,
+  # non-degenerate values under this choice across all genes and drugs
+  # tested. As with delta, a small sensitivity grid over (gigg_a, gigg_b)
+  # is recommended before treating any single choice as final for the
+  # paper's results.
+  #
+  # use_network_layer, use_horseshoe_layer: set either to FALSE to fit the
+  # corresponding ABLATION comparator specified in pathway.tex Phase 3
+  # (Section 3.4): a no-network variant (genes exchangeable, closer to
+  # Samorodnitsky et al. 2020's pooling structure) or a no-horseshoe
+  # variant (flat priors on gene effects, no sparsity layer). Both
+  # default to TRUE (the full model); setting both FALSE simultaneously
+  # is allowed and fits beta_tilde with ONLY the flat prior below -- a
+  # useful third comparator isolating the data term alone. When a layer
+  # is disabled, its associated parameters (kappa2/W/delta for the
+  # network layer; lambda2/zeta2/nu for the horseshoe layer) are not
+  # estimated and are excluded from the returned output for that fit,
+  # rather than being computed and silently ignored.
+  #
+  # flat_prior_var: the prior variance used for beta_tilde when
+  # use_horseshoe_layer = FALSE, i.e. beta_tilde_gd ~ Normal(0,
+  # flat_prior_var) independently per gene. Default 100, matching the
+  # flat prior already used for alpha_kd elsewhere in this model -- a
+  # genuinely uninformative prior across mutation-effect coefficients'
+  # realistic range (which is empirically O(0.01) to O(1), per the real
+  # gene/coefficient values observed during validation), not a
+  # tightly-tuned value chosen to make this comparator look artificially
+  # good or bad.
+
+  set.seed(seed)
+
+  N <- nrow(y)
+  D <- ncol(y)
+  G <- ncol(M)
+  gene_names <- colnames(M)
+
+  stopifnot(nrow(M) == N)
+  stopifnot(length(group) == N)
+
+  K <- length(unique(group))
+  group_idx <- as.integer(factor(group))  # remap to 1..K contiguous
+
+  obs_mask <- !is.na(y)  # N x D logical: TRUE where y is observed
+
+  # --- Network prior setup ---
+  # Genes in M that also appear in W get the GMRF network prior on
+  # beta_tilde; genes in M absent from W (e.g. the 83 unmapped genes in
+  # the real panel) get horseshoe-only shrinkage, handled by giving them
+  # an "infinite-variance" (i.e. zero-precision contribution) row/column
+  # in the network precision matrix below rather than excluding them from
+  # the model entirely. If use_network_layer = FALSE (the no-network
+  # ablation comparator, pathway.tex Phase 3), G_net is forced to 0
+  # regardless of W, which disables the network term entirely through the
+  # same `if (G_net > 0)` gate already used for genes absent from W --
+  # no separate code path is needed for this ablation.
+  if (use_network_layer) {
+    net_genes <- intersect(gene_names, rownames(W))
+  } else {
+    net_genes <- character(0)
+  }
+  net_idx <- match(net_genes, gene_names)         # positions within 1..G
+  G_net <- length(net_genes)
+
+  if (G_net > 0) {
+    W_sub <- W[net_genes, net_genes, drop = FALSE]
+    D_W <- diag(rowSums(W_sub))
+    Prec_net_sub <- D_W - delta * W_sub  # (D_W - delta*W), to be scaled by 1/kappa_d^2
+    # Verify positive-definiteness once, up front, rather than discovering
+    # a failure deep inside the sampler loop -- this mirrors the check
+    # already performed during network construction (see the project
+    # progress log) and is repeated here defensively in case W or delta
+    # changes between sessions.
+    eigvals_check <- eigen(Prec_net_sub, symmetric = TRUE, only.values = TRUE)$values
+    if (min(eigvals_check) <= 1e-8) {
+      stop(sprintf(
+        "D_W - delta*W is not positive definite at delta=%.3f (min eigenvalue = %.6e). Re-run the network construction step or choose a different delta from the verified grid {0.5, 0.7, 0.8, 0.9}.",
+        delta, min(eigvals_check)
+      ))
+    }
+  } else {
+    Prec_net_sub <- matrix(numeric(0), 0, 0)
+  }
+
+  # --- Initialize parameters ---
+  alpha <- matrix(0, K, D)
+  beta_tilde <- matrix(0, G, D)
+  beta <- array(0, dim = c(K, G, D))  # group-level beta (used only if use_group_layer)
+  sigma2 <- rep(1, D)
+  eta2 <- matrix(1, G, D)
+  kappa2 <- rep(1, D)
+  lambda2 <- matrix(1, G, D)
+  zeta2 <- rep(1, D)
+  nu <- matrix(1, G, D)    # horseshoe LOCAL auxiliary variable (lambda2 stays Inverse-Gamma)
+  # Note: the horseshoe GLOBAL auxiliary variable "xi" used in the original
+  # Makalic-Schmidt half-Cauchy-via-IG-mixture scheme is no longer needed --
+  # zeta2's precision is now drawn directly from a Gamma distribution (see
+  # Step 7 below and the file header), which is already a complete
+  # conjugate family requiring no further auxiliary-variable augmentation.
+
+  # --- Storage for kept samples ---
+  keep_iters <- seq(burn_in + 1, n_iter, by = thin)
+  n_kept <- length(keep_iters)
+  out_alpha <- array(NA, dim = c(K, D, n_kept))
+  out_beta_tilde <- array(NA, dim = c(G, D, n_kept))
+  out_sigma2 <- matrix(NA, D, n_kept)
+  out_kappa2 <- matrix(NA, D, n_kept)
+  out_lambda2 <- array(NA, dim = c(G, D, n_kept))
+  out_zeta2 <- matrix(NA, D, n_kept)
+  keep_pos <- 0L
+
+  # Precompute, per drug, which rows (samples) are observed -- avoids
+  # repeating the is.na() scan every iteration.
+  obs_rows_by_drug <- lapply(seq_len(D), function(d) which(obs_mask[, d]))
+
+  # ----------------------------------------------------------------- #
+  # PERFORMANCE: precompute every per-drug quantity that does NOT depend
+  # on the current iteration's sampled parameters, once, before the
+  # iteration loop -- rather than recomputing it fresh on every one of
+  # n_iter iterations. The dominant cost identified by profiling on real
+  # data (see the project progress log) was crossprod(M_d) in the
+  # no-group-layer path, which is a function of the fixed mutation data
+  # alone and is therefore identical on every iteration for a given drug;
+  # recomputing a ~951x219 crossprod thousands of times per drug was
+  # responsible for roughly 60% of total runtime. M_d itself (the row
+  # slice of M for drug d's observed samples) is precomputed for the same
+  # reason: slicing is cheap per call but still unnecessary repeated work
+  # across thousands of iterations.
+  # ----------------------------------------------------------------- #
+  M_d_list <- vector("list", D)
+  y_d_list <- vector("list", D)
+  grp_d_list <- vector("list", D)
+  data_prec_full_unscaled_list <- vector("list", D)  # crossprod(M_d), no-group-layer path only
+
+  for (d in seq_len(D)) {
+    rows_d <- obs_rows_by_drug[[d]]
+    if (length(rows_d) == 0) next
+    M_d_list[[d]] <- M[rows_d, , drop = FALSE]
+    y_d_list[[d]] <- y[rows_d, d]
+    grp_d_list[[d]] <- group_idx[rows_d]
+    if (!use_group_layer) {
+      data_prec_full_unscaled_list[[d]] <- crossprod(M_d_list[[d]])
+    }
+  }
+
+  for (t in seq_len(n_iter)) {
+
+    for (d in seq_len(D)) {
+      rows_d <- obs_rows_by_drug[[d]]
+      if (length(rows_d) == 0) next  # drug screened on zero retained samples; skip
+
+      y_d <- y_d_list[[d]]
+      M_d <- M_d_list[[d]]
+      grp_d <- grp_d_list[[d]]
+
+      # current fitted mutation contribution, used to back out the
+      # intercept's residual and vice versa
+      mu_mut_d <- M_d %*% beta_tilde[, d]  # using beta_tilde directly if no group layer;
+                                            # overwritten below if group layer active
+      if (use_group_layer) {
+        beta_d_per_row <- beta[grp_d, , d, drop = FALSE]
+        # recompute mu_mut_d using the group-specific beta for each row
+        mu_mut_d <- rowSums(M_d * beta[grp_d, , d])
+      }
+
+      # ---------------------------------------------------------------- #
+      # Step 1: intercepts alpha_{kd}
+      # ---------------------------------------------------------------- #
+      for (k in seq_len(K)) {
+        rows_k <- rows_d[grp_d == k]
+        if (length(rows_k) == 0) next
+        idx_in_d <- which(grp_d == k)
+        resid_k <- y_d[idx_in_d] - mu_mut_d[idx_in_d]
+        prec_k <- length(rows_k) / sigma2[d] + 1 / 100
+        mean_k <- (sum(resid_k) / sigma2[d]) / prec_k
+        alpha[k, d] <- rnorm(1, mean_k, sqrt(1 / prec_k))
+      }
+
+      # recompute residual against updated intercepts
+      resid_d <- y_d - alpha[grp_d, d]
+
+      # ---------------------------------------------------------------- #
+      # Step 2 & 3: group-level beta and group heterogeneity variance
+      # (optional layer only)
+      # ---------------------------------------------------------------- #
+      if (use_group_layer) {
+        for (k in seq_len(K)) {
+          idx_in_d <- which(grp_d == k)
+          if (length(idx_in_d) == 0) {
+            beta[k, , d] <- rnorm(G, beta_tilde[, d], sqrt(eta2[, d]))
+            next
+          }
+          M_k <- M_d[idx_in_d, , drop = FALSE]
+          y_k <- resid_d[idx_in_d]
+          # Conjugate Normal update for a G-vector regression coefficient
+          # with independent Normal(beta_tilde, eta2) prior per gene.
+          prior_prec <- diag(1 / eta2[, d], G, G)
+          A_k <- crossprod(M_k) / sigma2[d] + prior_prec
+          b_k <- crossprod(M_k, y_k) / sigma2[d] + (beta_tilde[, d] / eta2[, d])
+          # Single Cholesky factorization serves both the posterior mean
+          # and the random draw -- see the identical optimization and its
+          # rationale documented above Step 4's B_d update.
+          R_k <- chol(A_k)
+          beta_mean <- backsolve(R_k, forwardsolve(t(R_k), b_k))
+          beta[k, , d] <- as.numeric(
+            beta_mean + backsolve(R_k, rnorm(G))
+          )
+        }
+        # Step 3: group heterogeneity variance eta2_gd
+        for (g in seq_len(G)) {
+          ss <- sum((beta[, g, d] - beta_tilde[g, d])^2)
+          eta2[g, d] <- rinvgamma(1, shape = K / 2 + 0.01, rate = 0.01 + ss / 2)
+        }
+      }
+
+      # ---------------------------------------------------------------- #
+      # Step 4: network-and-horseshoe-structured mean effects beta_tilde_.d
+      # ---------------------------------------------------------------- #
+      if (use_group_layer) {
+        # Data-driven term comes from pooling across groups (sum over k of
+        # beta_{kgd}), precision diag(1/eta2_gd) * K in the simplest
+        # complete-pooling case; here we use the exact per-group precision
+        # sum so unequal eta2_gd values, if they arise, are respected.
+        data_prec_diag <- rep(0, G)
+        data_b <- rep(0, G)
+        for (k in seq_len(K)) {
+          data_prec_diag <- data_prec_diag + 1 / eta2[, d]
+          data_b <- data_b + beta[k, , d] / eta2[, d]
+        }
+      } else {
+        # No-group variant: beta_tilde regresses directly on the data.
+        # data_prec_full_unscaled_list[[d]] = crossprod(M_d), precomputed
+        # once before the iteration loop since it does not depend on any
+        # sampled parameter -- this was the single largest cost in
+        # profiling (see comment above the precomputation block).
+        data_prec_full <- data_prec_full_unscaled_list[[d]] / sigma2[d]
+        data_b_full <- crossprod(M_d, resid_d) / sigma2[d]
+      }
+
+      # Horseshoe precision (diagonal): 1 / (lambda_gd^2 * zeta_d^2).
+      # If use_horseshoe_layer = FALSE (the no-horseshoe ablation
+      # comparator, pathway.tex Phase 3), beta_tilde instead gets a flat,
+      # fixed Normal(0, flat_prior_var) prior per gene -- a genuinely
+      # uninformative prior (no sparsity, no shrinkage), not a
+      # disguised replacement for the horseshoe. lambda2/zeta2/nu are not
+      # estimated in this case (Steps 6-7 are skipped below).
+      if (use_horseshoe_layer) {
+        hs_prec_diag <- 1 / (lambda2[, d] * zeta2[d])
+      } else {
+        hs_prec_diag <- rep(1 / flat_prior_var, G)
+      }
+
+      # Network precision (only on the G_net genes that map to a pathway):
+      # full G x G precision matrix, zero outside the net_idx submatrix,
+      # so genes with no pathway membership get zero contribution here
+      # (they rely entirely on the horseshoe term above, as documented in
+      # pathway.tex Section 4). If use_network_layer = FALSE (the
+      # no-network ablation comparator), G_net is forced to 0 above, so
+      # this matrix is always all-zero here and contributes nothing --
+      # kappa2 is correspondingly not estimated (Step 5 is skipped below).
+      net_prec_full <- matrix(0, G, G)
+      if (G_net > 0) {
+        net_prec_full[net_idx, net_idx] <- Prec_net_sub / kappa2[d]
+      }
+
+      if (use_group_layer) {
+        B_d <- diag(data_prec_diag, G, G) + net_prec_full + diag(hs_prec_diag, G, G)
+        b_d <- data_b
+      } else {
+        B_d <- data_prec_full + net_prec_full + diag(hs_prec_diag, G, G)
+        b_d <- as.numeric(data_b_full)
+      }
+
+      # PERFORMANCE: B_d is symmetric positive-definite (it's a precision
+      # matrix: sum of a data-precision term, the GMRF network precision,
+      # and the horseshoe precision, each PSD or PD), so it admits a
+      # single Cholesky factorization R (upper-triangular, B_d = R'R) that
+      # serves BOTH purposes below -- solving for the posterior mean via
+      # two triangular solves, and drawing the random Normal perturbation
+      # via a single triangular solve against a standard Normal vector.
+      # This replaces the previous solve(B_d) (a full LU-based matrix
+      # inverse) followed by a SECOND, separate chol() of that inverse,
+      # which was redundant: both decompositions describe the same
+      # underlying covariance structure, so doing it once is mathematically
+      # equivalent and meaningfully faster (this and the analogous Step 2
+      # update were the dominant remaining cost after the crossprod fix
+      # documented above, per profiling on real data).
+      R_d <- chol(B_d)  # upper-triangular, B_d = t(R_d) %*% R_d
+      beta_tilde_mean <- backsolve(R_d, forwardsolve(t(R_d), b_d))
+      beta_tilde[, d] <- as.numeric(
+        beta_tilde_mean + backsolve(R_d, rnorm(G))
+      )
+
+      # ---------------------------------------------------------------- #
+      # Step 5: network smoothness variance kappa2_d
+      #
+      # GIGG-style fix (see file header): kappa2_d's precision
+      # (1/kappa2_d) is drawn from a Gamma distribution rather than
+      # kappa2_d itself from an Inverse-Gamma -- this breaks the
+      # distributional symmetry with zeta2_d (Step 7) that was previously
+      # causing both to collapse toward zero together. Derivation: with
+      # beta_tilde_net | tau_kappa ~ N(0, Prec_net^{-1} / tau_kappa), the
+      # likelihood contribution for tau_kappa = 1/kappa2_d is
+      # Gamma(shape=G_net/2, rate=quad_form/2); combined with a
+      # Gamma(gigg_a, gigg_b) prior, the conjugate posterior is
+      # Gamma(gigg_a + G_net/2, gigg_b + quad_form/2). Verified numerically
+      # against a directly grid-evaluated posterior before adoption.
+      # ---------------------------------------------------------------- #
+      if (G_net > 0) {
+        bt_net <- beta_tilde[net_idx, d]
+        quad_form <- as.numeric(t(bt_net) %*% Prec_net_sub %*% bt_net)
+        tau_kappa <- rgamma(1, shape = gigg_a + G_net / 2, rate = gigg_b + quad_form / 2)
+        kappa2[d] <- 1 / tau_kappa
+      }
+
+      # ---------------------------------------------------------------- #
+      # Step 6: horseshoe local shrinkage (per gene)
+      #
+      # Unchanged: lambda_gd keeps its original Inverse-Gamma (half-Cauchy
+      # via Makalic-Schmidt augmentation) structure. GIGG prescribes
+      # leaving the LOCAL shrinkage parameter Inverse-Gamma (heavy-tailed,
+      # lets individual genes escape shrinkage when supported by data) and
+      # only changing the GLOBAL/GROUP-level parameter's family -- see
+      # Step 7 below and the file header. Skipped entirely if
+      # use_horseshoe_layer = FALSE (the no-horseshoe ablation comparator,
+      # pathway.tex Phase 3): lambda2/nu are not estimated in that case,
+      # since beta_tilde instead uses the flat prior set up in Step 4.
+      # ---------------------------------------------------------------- #
+      if (use_horseshoe_layer) {
+        for (g in seq_len(G)) {
+          lambda2[g, d] <- rinvgamma(1, shape = 1,
+                                      rate = 1 / nu[g, d] + beta_tilde[g, d]^2 / (2 * zeta2[d]))
+          nu[g, d] <- rinvgamma(1, shape = 1, rate = 1 + 1 / lambda2[g, d])
+        }
+      }
+
+      # ---------------------------------------------------------------- #
+      # Step 7: horseshoe global shrinkage (per drug)
+      #
+      # GIGG-style fix (see file header and Step 5 above, applied
+      # identically here): zeta2_d's precision is drawn from a Gamma
+      # distribution instead of zeta2_d itself from an Inverse-Gamma.
+      # zeta2_d has shape=(G+1)/2 (G=219 in the real panel, i.e. shape~110)
+      # -- an even more severe instance of the Step 5 pathology, confirmed
+      # on real data: zeta2_d collapsed to exactly 0 even after kappa2_d
+      # was stabilized by the Step 5 fix alone, until this identical fix
+      # was applied here too. The same derivation as Step 5 applies with
+      # sum_term in place of quad_form and G in place of G_net. Skipped
+      # entirely if use_horseshoe_layer = FALSE, same rationale as Step 6.
+      # ---------------------------------------------------------------- #
+      if (use_horseshoe_layer) {
+        sum_term <- sum(beta_tilde[, d]^2 / lambda2[, d])
+        tau_zeta <- rgamma(1, shape = gigg_a + G / 2, rate = gigg_b + sum_term / 2)
+        zeta2[d] <- 1 / tau_zeta
+      }
+
+      # ---------------------------------------------------------------- #
+      # Step 8: residual variance sigma2_d
+      # ---------------------------------------------------------------- #
+      if (use_group_layer) {
+        mu_final <- alpha[grp_d, d] + rowSums(M_d * beta[grp_d, , d])
+      } else {
+        mu_final <- alpha[grp_d, d] + as.numeric(M_d %*% beta_tilde[, d])
+      }
+      ss_resid <- sum((y_d - mu_final)^2)
+      sigma2[d] <- rinvgamma(1, shape = 0.01 + length(rows_d) / 2,
+                              rate = 0.01 + ss_resid / 2)
+    }
+
+    if (verbose > 0 && t %% verbose == 0) {
+      cat(sprintf("[gibbs_sampler] iteration %d / %d\n", t, n_iter))
+    }
+
+    if (t %in% keep_iters) {
+      keep_pos <- keep_pos + 1L
+      out_alpha[, , keep_pos] <- alpha
+      out_beta_tilde[, , keep_pos] <- beta_tilde
+      out_sigma2[, keep_pos] <- sigma2
+      # Store NA (rather than the unused initialization value) for any
+      # layer disabled via use_network_layer / use_horseshoe_layer, so a
+      # saved ablation fit cannot be misread as having an active network
+      # or horseshoe layer at some particular (meaningless) value -- the
+      # config list above already records which layers were active, but
+      # this makes the parameter arrays themselves self-consistent too.
+      out_kappa2[, keep_pos] <- if (use_network_layer) kappa2 else NA
+      out_lambda2[, , keep_pos] <- if (use_horseshoe_layer) lambda2 else NA
+      out_zeta2[, keep_pos] <- if (use_horseshoe_layer) zeta2 else NA
+    }
+  }
+
+  list(
+    alpha = out_alpha,
+    beta_tilde = out_beta_tilde,
+    sigma2 = out_sigma2,
+    kappa2 = out_kappa2,
+    lambda2 = out_lambda2,
+    zeta2 = out_zeta2,
+    gene_names = gene_names,
+    group_levels = levels(factor(group)),
+    keep_iters = keep_iters,
+    # Layer-usage metadata, so a saved fit is self-documenting about which
+    # ablation configuration (if any) produced it -- relevant when
+    # comparing multiple fits later via cross-validated predictive
+    # likelihood (pathway.tex Phase 3).
+    config = list(
+      use_group_layer = use_group_layer,
+      use_network_layer = use_network_layer,
+      use_horseshoe_layer = use_horseshoe_layer,
+      delta = delta,
+      gigg_a = gigg_a,
+      gigg_b = gigg_b,
+      flat_prior_var = flat_prior_var
+    )
+  )
+}
+```
+
+---
+
+# Part 2: Simulation-Based Calibration
+
+**Why this step exists, and why it is not optional:** before trusting any
+result the sampler produces on real data, we check it against data where
+the true answer is known. This previously caught a genuine bug: with the
+optional group-pooling layer enabled and too few groups, the sampler
+converges to a self-consistent but *wrong* answer (every network-linked
+gene's effect collapses to zero regardless of its true value), driven by a
+feedback loop between the group-heterogeneity variance and the
+network-smoothness variance. It is **not** a coding error -- each
+individual update was verified correct in isolation -- it is a real
+property of the model when the number of groups is small relative to the
+number of genes. The fix is not a code change but a **configuration**
+choice: don't use the group-pooling layer unless you have enough groups
+(rule of thumb from the diagnosis: tens of samples per group is fine; 4
+groups for 15+ genes is not). The real dataset's 28 tissue types are
+enough for the layer to behave correctly if you want to use it, but it is
+not used by default below, matching the recommendation already in
+`04_model.tex`.
+
+```{r sim-data-function}
+if (!requireNamespace("MASS", quietly = TRUE)) {
+  install.packages("MASS", repos = "https://cloud.r-project.org")
+}
+library(MASS)
+
+simulate_one_dataset <- function(N = 200, G = 15, D = 3, K = 4,
+                                  G_net = 8, true_delta = 0.8) {
+  W <- matrix(0, G_net, G_net)
+  W[1:4, 1:4] <- 0.5
+  W[5:8, 5:8] <- 0.5
+  diag(W) <- 0
+  W[4, 5] <- W[5, 4] <- 0.3
+  rownames(W) <- colnames(W) <- paste0("gene", 1:G_net)
+  gene_names <- paste0("gene", 1:G)
+
+  true_alpha <- matrix(rnorm(K * D, 0, 1), K, D)
+  true_kappa2 <- rep(0.5, D)
+  true_sigma2 <- rep(0.3, D)
+
+  D_W <- diag(rowSums(W))
+  Prec_net <- D_W - true_delta * W
+  Sigma_net <- solve(Prec_net) * true_kappa2[1]
+
+  true_beta_tilde <- matrix(0, G, D)
+  for (d in seq_len(D)) {
+    true_beta_tilde[1:G_net, d] <- MASS::mvrnorm(1, rep(0, G_net), Sigma_net * true_kappa2[d] / true_kappa2[1])
+    nonzero_extra <- sample((G_net + 1):G, 2)
+    true_beta_tilde[nonzero_extra, d] <- rnorm(2, 0, 1.5)
+  }
+
+  mut_freq <- runif(G, 0.05, 0.4)
+  M <- matrix(rbinom(N * G, 1, rep(mut_freq, each = N)), N, G)
+  colnames(M) <- gene_names
+  group <- sample(1:K, N, replace = TRUE)
+
+  y <- matrix(NA, N, D)
+  for (d in seq_len(D)) {
+    mu <- true_alpha[group, d] + as.numeric(M %*% true_beta_tilde[, d])
+    y[, d] <- rnorm(N, mu, sqrt(true_sigma2[d]))
+  }
+
+  list(y = y, M = M, group = group, W = W, true_alpha = true_alpha,
+       true_beta_tilde = true_beta_tilde, true_sigma2 = true_sigma2,
+       true_kappa2 = true_kappa2, gene_names = gene_names)
+}
+```
+
+```{r calibration-function}
+run_calibration <- function(use_group_layer, K, N, label, n_reps = 15,
+                             n_iter = 1500, burn_in = 750, thin = 2) {
+  cat(sprintf("\n=== Scenario: %s (K=%d groups, N=%d samples, use_group_layer=%s) ===\n",
+              label, K, N, use_group_layer))
+
+  coverage_beta_tilde <- c()
+  coverage_sigma2 <- c()
+  coverage_alpha <- c()
+
+  for (rep_i in seq_len(n_reps)) {
+    sim <- simulate_one_dataset(N = N, K = K)
+
+    fit <- gibbs_sampler(
+      y = sim$y, M = sim$M, group = sim$group, W = sim$W,
+      delta = 0.8, use_group_layer = use_group_layer,
+      n_iter = n_iter, burn_in = burn_in, thin = thin,
+      verbose = 0, seed = 100 + rep_i
+    )
+
+    G <- nrow(sim$true_beta_tilde); D <- ncol(sim$true_beta_tilde)
+    for (g in seq_len(G)) for (d in seq_len(D)) {
+      ci <- quantile(fit$beta_tilde[g, d, ], c(0.025, 0.975))
+      coverage_beta_tilde <- c(coverage_beta_tilde,
+        sim$true_beta_tilde[g, d] >= ci[1] && sim$true_beta_tilde[g, d] <= ci[2])
+    }
+    for (d in seq_len(D)) {
+      ci <- quantile(fit$sigma2[d, ], c(0.025, 0.975))
+      coverage_sigma2 <- c(coverage_sigma2,
+        sim$true_sigma2[d] >= ci[1] && sim$true_sigma2[d] <= ci[2])
+    }
+    Kk <- nrow(sim$true_alpha)
+    for (k in seq_len(Kk)) for (d in seq_len(D)) {
+      ci <- quantile(fit$alpha[k, d, ], c(0.025, 0.975))
+      coverage_alpha <- c(coverage_alpha,
+        sim$true_alpha[k, d] >= ci[1] && sim$true_alpha[k, d] <= ci[2])
+    }
+  }
+
+  cat(sprintf("beta_tilde coverage: %.1f%% | sigma2: %.1f%% | alpha: %.1f%%\n",
+              100 * mean(coverage_beta_tilde), 100 * mean(coverage_sigma2),
+              100 * mean(coverage_alpha)))
+  invisible(list(beta_tilde = mean(coverage_beta_tilde),
+                  sigma2 = mean(coverage_sigma2), alpha = mean(coverage_alpha)))
+}
+```
+
+```{r run-calibration}
+# Set SIM_REPS lower (e.g. 5) for a quick smoke test, or higher (30+) for
+# a more rigorous check. 15 is a reasonable default (a few minutes total).
+n_reps <- 15
+
+result_A <- run_calibration(use_group_layer = FALSE, K = 4, N = 200,
+                             label = "(A) No-group-layer -- RECOMMENDED for real data",
+                             n_reps = n_reps)
+result_B <- run_calibration(use_group_layer = TRUE, K = 4, N = 200,
+                             label = "(B) Group-layer, K=4 -- KNOWN FAILURE MODE (kept as a regression check)",
+                             n_reps = n_reps)
+result_C <- run_calibration(use_group_layer = TRUE, K = 20, N = 800,
+                             label = "(C) Group-layer, K=20 -- viable group size",
+                             n_reps = n_reps)
+```
+
+```{r calibration-summary}
+summary_df <- data.frame(
+  Scenario = c("(A) No-group (recommended)", "(B) Group layer, K=4 (failure mode)",
+               "(C) Group layer, K=20 (viable)"),
+  beta_tilde_coverage = sprintf("%.1f%%", 100 * c(result_A$beta_tilde, result_B$beta_tilde, result_C$beta_tilde)),
+  sigma2_coverage = sprintf("%.1f%%", 100 * c(result_A$sigma2, result_B$sigma2, result_C$sigma2)),
+  alpha_coverage = sprintf("%.1f%%", 100 * c(result_A$alpha, result_B$alpha, result_C$alpha))
+)
+summary_df
+```
+
+If (A) and (C) are both close to 95% and (B) is well below it (typically
+60-70%), the sampler is behaving as expected and it is safe to proceed to
+Part 3. If (A) is unexpectedly low, stop and investigate before trusting
+any real-data result -- do not proceed to Part 3 in that case.
+
+---
+
+# Part 3: Run on Real Data
+
+## Step 1: Load your real data files
+
+Edit the paths below if your files aren't in the current working
+directory.
+
+**Important data note:** `gene_adjacency_W.csv` (a **gene x gene**
+matrix, 135 genes after dropping one isolated node) is loaded here, NOT
+`pathway_adjacency_W.csv` (a **pathway x pathway** matrix, 141 pathways).
+An earlier version of this notebook loaded the pathway-level matrix by
+mistake; since its row/column names are pathway names rather than gene
+names, `intersect(gene_names, rownames(W))` inside `gibbs_sampler()`
+silently evaluated to zero genes for every drug, which meant Step 5's
+$\kappa_d^2$ update never ran at all and stayed frozen at its
+initialization value (1.0) for the entire run -- this was confirmed
+directly on real output (`kappa2` showing exactly 1.0 with zero variance
+across thousands of kept samples, for every drug). `gene_adjacency_W.csv`
+is derived from `pathway_gene_membership.csv` (two genes are linked if
+they share at least one retained KEGG pathway), built and verified
+positive-definite at the same candidate $\delta$ grid as the original
+network; see the project progress log for the full construction and
+diagnostic account.
+
+```{r load-real-data}
+mut <- read.csv("mutation_matrix.csv", row.names = 1, check.names = FALSE)
+resp <- read.csv("response_matrix.csv")
+groups <- read.csv("model_groups.csv")
+W_real <- read.csv("gene_adjacency_W.csv", row.names = 1, check.names = FALSE)
+W_real <- as.matrix(W_real)
+
+cat("Mutation matrix:", nrow(mut), "genes x", ncol(mut), "models\n")
+cat("Response rows:", nrow(resp), "| unique drugs:", length(unique(resp$drug_id)),
+    "| unique models:", length(unique(resp$model_id)), "\n")
+cat("Network matrix:", nrow(W_real), "x", ncol(W_real),
+    "-- row/col names should be GENE symbols, not pathway names:\n")
+print(head(rownames(W_real), 5))
+```
+
+## Step 2: Reshape into the sampler's expected format
+
+```{r reshape-real-data}
+model_ids <- colnames(mut)
+M_real <- t(as.matrix(mut))          # N x G
+rownames(M_real) <- model_ids
+
+all_drugs <- sort(unique(resp$drug_id))
+y_real <- matrix(NA, nrow = length(model_ids), ncol = length(all_drugs),
+                  dimnames = list(model_ids, as.character(all_drugs)))
+for (i in seq_len(nrow(resp))) {
+  y_real[as.character(resp$model_id[i]), as.character(resp$drug_id[i])] <- resp$y[i]
+}
+
+# Group vector for the optional pooling layer -- NOT used by default
+# (use_group_layer = FALSE below), per the recommendation in 04_model.tex
+# and the calibration results in Part 2. Kept here in case you want to
+# experiment with it.
+group_vec <- groups$tissue[match(model_ids, groups$model_id)]
+
+cat("y_real dim:", dim(y_real), "| NAs:", sum(is.na(y_real)), "/", length(y_real), "\n")
+cat("Any model with no matching tissue group:", sum(is.na(group_vec)), "\n")
+```
+
+## Step 3: Short test run (recommended first)
+
+This runs on the FULL real dataset (all 951 models, 219 genes) but only a
+handful of drugs and a short chain, so it finishes in well under a minute
+-- use this to confirm everything loads and runs correctly before
+committing to a long full run. **Two chains** are run (not one), with
+different seeds, so Part 4's diagnostics (which need $\geq 2$ chains for
+Gelman-Rubin) can be exercised at this fast test scale before you commit
+to a long full run.
+
+```{r real-data-test-run}
+test_drugs <- all_drugs[1:3]
+y_test <- y_real[, as.character(test_drugs), drop = FALSE]
+
+n_test_chains <- 2
+fits_test <- vector("list", n_test_chains)
+
+t0 <- Sys.time()
+for (chain_i in seq_len(n_test_chains)) {
+  fits_test[[chain_i]] <- gibbs_sampler(
+    y = y_test, M = M_real, group = rep(1, length(model_ids)), W = W_real,
+    delta = 0.8, use_group_layer = FALSE,
+    n_iter = 200, burn_in = 100, thin = 2,
+    verbose = 0, seed = chain_i
+  )
+}
+t1 <- Sys.time()
+cat("Elapsed:", round(as.numeric(difftime(t1, t0, units = "secs")), 1),
+    "seconds for", length(test_drugs), "drugs,", n_test_chains,
+    "chains, 200 iterations each.\n")
+```
+
+```{r real-data-test-sanity-check}
+# Sanity check: TP53 is the most frequently mutated gene in the panel
+# (67.3% of cell lines) and was the dominant predictor in an independent
+# external study (Samorodnitsky et al. 2020, for survival rather than
+# drug response) -- its posterior should show non-trivial signal, not
+# collapse to a degenerate near-zero estimate the way the buggy
+# group-layer configuration did in Part 2's Scenario B.
+tp53_idx <- which(rownames(mut) == "TP53")
+cat("TP53 beta_tilde posterior mean per test drug (chain 1):\n")
+print(round(apply(fits_test[[1]]$beta_tilde[tp53_idx, , , drop = FALSE], c(1, 2), mean), 4))
+cat("TP53 beta_tilde posterior SD per test drug (chain 1; should be > 0, not collapsed):\n")
+print(round(apply(fits_test[[1]]$beta_tilde[tp53_idx, , , drop = FALSE], c(1, 2), sd), 4))
+```
+
+You can run Part 4's diagnostics on `fits_test` right now, before
+committing to a full run, by setting `fits_for_diagnostics <- fits_test`
+in the first chunk of Part 4 below -- useful for confirming the
+diagnostic code itself works and for getting an early read on problem
+genes at low cost, though short chains will generally show lower ESS and
+higher $\hat R$ than a properly-sized full run, so don't treat test-scale
+diagnostic results as a verdict on the model.
+
+## Step 4: Full run (all drugs, multiple chains)
+
+**This will take time, multiplied by the number of chains.** Edit the
+settings in the chunk immediately below to change the chain length,
+burn-in, thinning, or number of chains -- every other chunk in this
+section reads from these variables, so you only need to change them in
+one place.
+
+```{r mcmc-settings}
+# --- EDIT THESE TO CHANGE THE FULL RUN ---
+mcmc_n_iter   <- 5000   # total iterations per chain
+mcmc_burn_in  <- 1000   # discarded from the start of each chain
+mcmc_thin     <- 2      # keep every mcmc_thin-th post-burn-in iteration
+mcmc_n_chains <- 2      # >= 2 required for Gelman-Rubin in Part 4
+
+# Samples kept per chain = (mcmc_n_iter - mcmc_burn_in) / mcmc_thin
+samples_per_chain <- (mcmc_n_iter - mcmc_burn_in) / mcmc_thin
+cat("Samples kept per chain:", samples_per_chain, "\n")
+cat("Total chains:", mcmc_n_chains, "\n")
+cat("Total kept samples across all chains:", samples_per_chain * mcmc_n_chains, "\n")
+if (samples_per_chain != floor(samples_per_chain)) {
+  warning("(mcmc_n_iter - mcmc_burn_in) is not evenly divisible by mcmc_thin -- the actual kept count will be floor()'d by the sampler; consider adjusting so the arithmetic is exact.")
+}
+```
+
+With the defaults above (4{,}000 / 1{,}000 / 3), each chain keeps 1{,}000
+samples. Runtime scales linearly in `mcmc_n_iter` and in `mcmc_n_chains`
+(chains are run sequentially below, not in parallel); per-chain timing
+benchmarked on this real dataset (951 models, 219 genes, all 295 drugs):
+
+- `mcmc_n_iter = 1500`: ~45-50 minutes per chain
+- `mcmc_n_iter = 2000`: ~65-70 minutes per chain
+- `mcmc_n_iter = 4000`: ~2.2 hours per chain
+
+These are real measured rates from this notebook's optimized sampler, not
+rough guesses -- but your machine's speed will vary, and **the default
+`mcmc_n_chains = 2` doubles whichever of the above applies.** At
+`mcmc_n_iter = 4000` this means roughly 4.4 hours total for 2 chains.
+Consider running this chunk separately (not as part of "Run All") and
+saving the result with `saveRDS()` so you don't need to rerun it every
+time you reopen this notebook.
+
+```{r real-data-full-run, eval=FALSE}
+# Set eval=TRUE above (or run this chunk manually) when you're ready for
+# the full run. Left as eval=FALSE by default so "Run All" doesn't
+# accidentally trigger a multi-hour run.
+
+fits_full <- vector("list", mcmc_n_chains)
+
+for (chain_i in seq_len(mcmc_n_chains)) {
+  cat(sprintf("\n=== Chain %d / %d ===\n", chain_i, mcmc_n_chains))
+  t0 <- Sys.time()
+  fits_full[[chain_i]] <- gibbs_sampler(
+    y = y_real, M = M_real, group = rep(1, length(model_ids)), W = W_real,
+    delta = 0.5, use_group_layer = FALSE,
+    n_iter = mcmc_n_iter, burn_in = mcmc_burn_in, thin = mcmc_thin,
+    verbose = 200,
+    seed = chain_i   # DIFFERENT SEED PER CHAIN -- required for chains to
+                      # be independent draws from different starting
+                      # points, which is what Gelman-Rubin in Part 4
+                      # actually tests.
+  )
+  t1 <- Sys.time()
+  cat(sprintf("Chain %d elapsed: %.1f minutes\n", chain_i,
+              as.numeric(difftime(t1, t0, units = "mins"))))
+}
+
+saveRDS(fits_full, "gibbs_fits_full0.5.rds")
+cat("\nSaved", mcmc_n_chains, "chains to gibbs_fits_full0.5.rds\n")
+```
+
+```{r reload-full-run, eval=FALSE}
+# If you're returning to this notebook after the full run already
+# completed and was saved, skip the chunk above and just reload:
+fits_full <- readRDS("gibbs_fits_full.rds")
+cat("Reloaded", length(fits_full), "chains.\n")
+```
+
+## Step 5: Inspect results (after the full run)
+
+```{r inspect-results, eval=FALSE}
+# Run this after Step 4 completes (or after reloading saved fits with
+# fits_full <- readRDS("gibbs_fits_full.rds")).
+#
+# Uses chain 1 for this inspection; Part 4 below checks whether chain 1
+# agrees with the other chains closely enough that using just one is
+# actually justified (that is precisely what Gelman-Rubin measures) --
+# check Part 4 before reporting any single-chain result like this one as
+# a final answer.
+
+# Posterior inclusion: which genes have a beta_tilde credible interval
+# that excludes zero for a given drug, as a simple sparsity summary
+# (a more formal posterior-inclusion-probability approach, following
+# Pham et al. 2018 Section 4.7's BFDR thresholding, is a natural next
+# step but not implemented in this notebook).
+drug_to_inspect <- colnames(y_real)[1]
+d_idx <- which(colnames(y_real) == drug_to_inspect)
+
+ci_lo <- apply(fits_full[[1]]$beta_tilde[, d_idx, ], 1, quantile, 0.025)
+ci_hi <- apply(fits_full[[1]]$beta_tilde[, d_idx, ], 1, quantile, 0.975)
+excludes_zero <- (ci_lo > 0) | (ci_hi < 0)
+
+genes_flagged <- rownames(mut)[excludes_zero]
+cat("Drug", drug_to_inspect, "-- genes whose 95% CI excludes zero (chain 1):\n")
+print(genes_flagged)
+```
+
+## Step 6: Ablation comparators (pathway.tex Phase 3)
+
+Per the methodology document's Phase 3, the full model should be compared
+against two reduced variants to demonstrate that the network layer and
+the horseshoe layer are each "earning their complexity," not just adding
+parameters for no benefit:
+
+- **No-network**: `use_network_layer = FALSE` -- genes are exchangeable
+  under the horseshoe alone (closer to Samorodnitsky et al. 2020's
+  pooling structure, without the GMRF/pathway structure).
+- **No-horseshoe**: `use_horseshoe_layer = FALSE` -- a flat
+  $\text{Normal}(0,$ `flat_prior_var`$)$ prior replaces the sparsity
+  layer; no shrinkage, no escape-from-shrinkage behavior.
+
+Both reuse every other setting (drugs, chains, iterations) from
+`mcmc_n_iter`/`mcmc_burn_in`/`mcmc_thin`/`mcmc_n_chains` set in Step 4
+above, so the three fits are directly comparable.
+
+```{r ablation-fits, eval=FALSE}
+# Run this AFTER Step 4's full run (fits_full) has completed and been
+# saved. Like Step 4, this is gated behind eval=FALSE since it runs the
+# sampler two more times at full scale -- expect roughly the same
+# per-chain runtime as Step 4 for each ablation variant.
+
+fits_nonetwork <- vector("list", mcmc_n_chains)
+fits_nohorseshoe <- vector("list", mcmc_n_chains)
+
+for (chain_i in seq_len(mcmc_n_chains)) {
+  cat(sprintf("\n=== No-network ablation, Chain %d / %d ===\n", chain_i, mcmc_n_chains))
+  fits_nonetwork[[chain_i]] <- gibbs_sampler(
+    y = y_real, M = M_real, group = rep(1, length(model_ids)), W = W_real,
+    delta = 0.8, use_group_layer = FALSE, use_network_layer = FALSE,
+    n_iter = mcmc_n_iter, burn_in = mcmc_burn_in, thin = mcmc_thin,
+    verbose = 200, seed = chain_i
+  )
+}
+saveRDS(fits_nonetwork, "gibbs_fits_nonetwork.rds")
+cat("Saved no-network ablation fits.\n")
+
+for (chain_i in seq_len(mcmc_n_chains)) {
+  cat(sprintf("\n=== No-horseshoe ablation, Chain %d / %d ===\n", chain_i, mcmc_n_chains))
+  fits_nohorseshoe[[chain_i]] <- gibbs_sampler(
+    y = y_real, M = M_real, group = rep(1, length(model_ids)), W = W_real,
+    delta = 0.8, use_group_layer = FALSE, use_horseshoe_layer = FALSE,
+    n_iter = mcmc_n_iter, burn_in = mcmc_burn_in, thin = mcmc_thin,
+    verbose = 200, seed = chain_i
+  )
+}
+saveRDS(fits_nohorseshoe, "gibbs_fits_nohorseshoe.rds")
+cat("Saved no-horseshoe ablation fits.\n")
+```
+
+```{r ablation-reload, eval=FALSE}
+# Reload all three fits if returning to this notebook later:
+fits_full <- readRDS("gibbs_fits_full.rds")
+fits_nonetwork <- readRDS("gibbs_fits_nonetwork.rds")
+fits_nohorseshoe <- readRDS("gibbs_fits_nohorseshoe.rds")
+```
+
+### Comparing models via held-out predictive likelihood
+
+Following \citet{samorodnitsky2020}'s Section 2.4 (cited in
+`pathway.tex`), the recommended comparison metric is out-of-sample
+log-posterior predictive likelihood under $k$-fold cross-validation. The
+function below computes a simpler in-sample version (posterior-mean
+squared error and log-likelihood at the posterior mean) as a quick first
+check; replacing this with genuine held-out folds is a natural
+extension, not yet implemented here, since it requires re-fitting each
+model $k$ times rather than once.
+
+```{r ablation-comparison, eval=FALSE}
+# Quick in-sample comparison (NOT a substitute for proper k-fold
+# out-of-sample predictive likelihood, but a fast sanity check that the
+# three models actually differ in fit quality before investing in the
+# full cross-validation).
+compare_insample_fit <- function(fit_chains, y, M, label) {
+  # Use chain 1's posterior mean for mu, sigma2
+  beta_tilde_mean <- apply(fit_chains[[1]]$beta_tilde, c(1, 2), mean)
+  sigma2_mean <- apply(fit_chains[[1]]$sigma2, 1, mean)
+  alpha_mean <- apply(fit_chains[[1]]$alpha, c(1, 2), mean)
+
+  D <- ncol(y)
+  total_loglik <- 0
+  total_sq_err <- 0
+  total_n <- 0
+  for (d in seq_len(D)) {
+    obs_rows <- which(!is.na(y[, d]))
+    if (length(obs_rows) == 0) next
+    mu_d <- alpha_mean[1, d] + as.numeric(M[obs_rows, , drop = FALSE] %*% beta_tilde_mean[, d])
+    resid <- y[obs_rows, d] - mu_d
+    total_sq_err <- total_sq_err + sum(resid^2)
+    total_n <- total_n + length(obs_rows)
+    total_loglik <- total_loglik + sum(dnorm(y[obs_rows, d], mu_d, sqrt(sigma2_mean[d]), log = TRUE))
+  }
+  cat(sprintf("%-20s: in-sample log-lik = %.1f | RMSE = %.4f | n = %d\n",
+              label, total_loglik, sqrt(total_sq_err / total_n), total_n))
+  invisible(list(loglik = total_loglik, rmse = sqrt(total_sq_err / total_n)))
+}
+
+cat("=== In-sample comparison (quick check; replace with k-fold for the paper) ===\n")
+result_full <- compare_insample_fit(fits_full, y_real, M_real, "Full model")
+result_nonet <- compare_insample_fit(fits_nonetwork, y_real, M_real, "No-network")
+result_nohs <- compare_insample_fit(fits_nohorseshoe, y_real, M_real, "No-horseshoe")
+```
+
+---
+
+# Part 4: MCMC Diagnostics
+
+**Why this part exists.** Part 2's simulation-based calibration checks a
+different question than the one here: calibration asks "if I have enough
+posterior samples, are my credible intervals the right size and in the
+right place?" -- it does not check whether the samples you actually drew
+behave like a converged, well-mixing chain. A sampler can pass
+calibration on a short, clean simulated problem and still mix poorly on
+a larger, more correlated real dataset. This matters concretely here
+because the multicollinearity diagnostic (project progress log) found a
+biologically real co-mutation cluster (RPL22, ACVR2A, BAX, BMPR2, KMT2B,
+STAT5B, linked to microsatellite instability) with a correlation matrix
+condition number of 208 -- exactly the kind of structure that can slow
+Gibbs sampler mixing for the genes involved, since the chain has to take
+small steps through a narrow, correlated ridge in the posterior rather
+than moving freely.
+
+Three diagnostics are computed below, using the `coda` package's standard
+reference implementations:
+
+- **Gelman-Rubin $\hat R$**: compares within-chain to between-chain
+  variance across $\geq 2$ chains started from different seeds. Values
+  close to 1 indicate the chains agree; the conventional threshold for
+  concern is $\hat R > 1.1$.
+- **Effective Sample Size (ESS)**: how many independent draws your
+  autocorrelated MCMC samples are actually worth. **You specified ESS
+  $<$ 800 as not acceptable** for this project -- the summary table below
+  flags every parameter below that threshold explicitly.
+- **Geweke diagnostic**: within a single chain, compares the mean of an
+  early window to the mean of a late window; the underlying Z-score is a
+  standard-normal test statistic under the null of stationarity, reported
+  here as a two-sided p-value (flagged at $p < 0.05$, equivalent to
+  $|Z| > 1.96$) for consistency with how significance is reported
+  elsewhere in this project. A small p-value suggests the chain had not
+  yet stabilized over the window compared.
+
+## Step 1: Choose which fit to diagnose
+
+```{r diagnostics-choose-fit}
+# Point this at whichever set of chains you want to check:
+#   - fits_test   (from Part 3, Step 3 -- fast, useful for an early look)
+#   - fits_full   (from Part 3, Step 4 -- the real, full-length run)
+#
+# EDIT THIS LINE:
+fits_for_diagnostics <- fits_full # fits_test   # change to fits_full once you have it
+
+cat("Diagnosing", length(fits_for_diagnostics), "chain(s).\n")
+cat("Samples per chain:", dim(fits_for_diagnostics[[1]]$beta_tilde)[3], "\n")
+cat("Drugs in this fit:", dim(fits_for_diagnostics[[1]]$beta_tilde)[2], "\n")
+cat("Genes in this fit:", dim(fits_for_diagnostics[[1]]$beta_tilde)[1], "\n")
+
+if (length(fits_for_diagnostics) < 2) {
+  warning("Gelman-Rubin requires >= 2 chains. Re-run Part 3 with n_test_chains >= 2 (test scale) or mcmc_n_chains >= 2 (full scale) before computing Rhat.")
+}
+```
+
+## Step 2: Diagnostic functions
+
+```{r diagnostics-functions}
+# Builds a coda mcmc.list for a single beta_tilde[gene, drug, ] parameter
+# across all available chains. Returns NULL (rather than erroring) if any
+# chain has zero variance for this parameter, since coda's gelman.diag()
+# fails outright on a zero-variance chain and a single bad parameter
+# should not stop a scan over hundreds of others.
+build_mcmc_list_beta <- function(fits, gene_idx, drug_idx) {
+  chains <- lapply(fits, function(f) {
+    vals <- f$beta_tilde[gene_idx, drug_idx, ]
+    if (sd(vals) < 1e-10) return(NULL)
+    coda::mcmc(as.matrix(vals))
+  })
+  if (any(sapply(chains, is.null))) return(NULL)
+  coda::mcmc.list(chains)
+}
+
+# Same idea, for a scalar-per-drug parameter like sigma2[d, ] or kappa2[d, ].
+build_mcmc_list_scalar <- function(fits, extract_fn, drug_idx) {
+  chains <- lapply(fits, function(f) {
+    vals <- extract_fn(f, drug_idx)
+    if (sd(vals) < 1e-10) return(NULL)
+    coda::mcmc(as.matrix(vals))
+  })
+  if (any(sapply(chains, is.null))) return(NULL)
+  coda::mcmc.list(chains)
+}
+
+# Scans every beta_tilde[gene, drug] parameter (or a specified subset of
+# drugs, to keep runtime manageable when D is large) and returns a data
+# frame with Rhat, ESS, and the Geweke diagnostic (chain 1) for each.
+#
+# Geweke's Z-score is already a standard-normal test statistic under the
+# null of chain stationarity (Geweke, 1992), so the two-sided p-value is
+# simply 2 * pnorm(-abs(Z)) -- this is computed and flagged on directly
+# (geweke_p < 0.05) rather than thresholding the Z-score itself, since a
+# p-value reads consistently alongside the rest of this project's
+# credible-interval-based reporting. Note this is very close numerically
+# to the previous |Z| > 2 rule (Z = 1.96 <=> p = 0.05 exactly; Z = 2 <=>
+# p = 0.0455), so very few, if any, parameters change flag status as a
+# result of this change -- the point of switching is interpretability and
+# consistency with how significance is reported elsewhere, not a
+# materially different cutoff.
+scan_beta_tilde_diagnostics <- function(fits, drug_indices = NULL, ess_threshold = 800) {
+  G <- dim(fits[[1]]$beta_tilde)[1]
+  D_total <- dim(fits[[1]]$beta_tilde)[2]
+  if (is.null(drug_indices)) drug_indices <- seq_len(D_total)
+  gene_names <- fits[[1]]$gene_names
+
+  results <- vector("list", G * length(drug_indices))
+  idx <- 1L
+  for (d in drug_indices) {
+    for (g in seq_len(G)) {
+      mcmc_obj <- build_mcmc_list_beta(fits, g, d)
+      if (is.null(mcmc_obj)) {
+        rhat <- NA; ess <- NA; geweke_z <- NA; geweke_p <- NA
+      } else {
+        rhat <- if (length(fits) >= 2) {
+          tryCatch(coda::gelman.diag(mcmc_obj, autoburnin = FALSE)$psrf[1, 1],
+                   error = function(e) NA)
+        } else NA
+        ess <- tryCatch(sum(coda::effectiveSize(mcmc_obj)), error = function(e) NA)
+        geweke_z <- tryCatch(coda::geweke.diag(mcmc_obj[[1]])$z[[1]],
+                              error = function(e) NA)
+        geweke_p <- if (is.na(geweke_z)) NA else 2 * pnorm(-abs(geweke_z))
+      }
+      results[[idx]] <- data.frame(
+        gene = gene_names[g], drug_col_idx = d,
+        rhat = rhat, ess = ess, geweke_z = geweke_z, geweke_p = geweke_p
+      )
+      idx <- idx + 1L
+    }
+  }
+  out <- do.call(rbind, results)
+  out$rhat_flag <- !is.na(out$rhat) & out$rhat > 1.1
+  out$ess_flag <- !is.na(out$ess) & out$ess < ess_threshold
+  out$geweke_flag <- !is.na(out$geweke_p) & out$geweke_p < 0.05
+  out
+}
+```
+
+## Step 3: Run the scan
+
+By default this scans every gene for the **first 3 drugs** in the fit, to
+keep runtime reasonable for a quick check (each parameter requires
+building an `mcmc.list` and running three diagnostics on it). Increase
+`drugs_to_scan` once you've confirmed this runs correctly and want full
+coverage -- with `fits_full` at full scale (219 genes $\times$ 295 drugs
+$=$ 64{,}605 parameters) this should still take at most a few minutes,
+since each individual diagnostic computation is cheap; it has not been
+benchmarked at that full scale in this notebook.
+
+```{r run-diagnostic-scan}
+n_drugs_in_fit <- dim(fits_for_diagnostics[[1]]$beta_tilde)[2]
+drugs_to_scan <- seq_len(n_drugs_in_fit) # seq_len(min(3, n_drugs_in_fit))  # EDIT: e.g. seq_len(n_drugs_in_fit) for all drugs
+
+diag_results <- scan_beta_tilde_diagnostics(
+  fits_for_diagnostics, drug_indices = drugs_to_scan, ess_threshold = 800
+)
+
+cat("Parameters scanned:", nrow(diag_results), "\n")
+cat("Flagged for Rhat > 1.1:", sum(diag_results$rhat_flag, na.rm = TRUE), "\n")
+cat("Flagged for ESS < 800:", sum(diag_results$ess_flag, na.rm = TRUE), "\n")
+cat("Flagged for Geweke p-value < 0.05:", sum(diag_results$geweke_flag, na.rm = TRUE), "\n")
+cat("\nESS distribution:\n")
+print(summary(diag_results$ess))
+```
+
+## Step 4: Inspect flagged parameters
+
+```{r inspect-flagged}
+any_flag <- diag_results$rhat_flag | diag_results$ess_flag | diag_results$geweke_flag
+flagged <- diag_results[any_flag & !is.na(any_flag), ]
+flagged <- flagged[order(flagged$ess), ]  # worst ESS first
+
+cat(nrow(flagged), "of", nrow(diag_results), "parameters flagged by at least one diagnostic.\n\n")
+flagged
+```
+
+```{r check-msi-cluster, eval=TRUE}
+# Specifically check the MSI co-mutation cluster genes identified in the
+# multicollinearity diagnostic (project progress log) -- these are the
+# genes most likely, on substantive grounds, to show slower mixing due to
+# their mutual correlation.
+msi_cluster_genes <- c("RPL22", "ACVR2A", "BAX", "BMPR2", "KMT2B", "STAT5B")
+msi_results <- diag_results[diag_results$gene %in% msi_cluster_genes, ]
+cat("MSI-cluster gene diagnostics (genes present in this fit's panel):\n")
+print(msi_results)
+```
+
+## Step 5: Trace plots for a specific parameter (visual check)
+
+Numbers above can hide patterns a trace plot makes obvious (slow drift,
+one chain stuck far from the others, etc.). Plot any flagged parameter
+here by gene name and drug column index.
+
+```{r trace-plot, fig.width=9, fig.height=4}
+gene_to_plot <- "TP53"      # EDIT: any gene name from rownames(mut)
+drug_col_to_plot <- 1        # EDIT: column index into fits_for_diagnostics[[1]]$beta_tilde
+
+g_idx <- which(fits_for_diagnostics[[1]]$gene_names == gene_to_plot)
+mcmc_obj <- build_mcmc_list_beta(fits_for_diagnostics, g_idx, drug_col_to_plot)
+
+if (is.null(mcmc_obj)) {
+  cat("This parameter had zero variance in at least one chain -- nothing to plot.\n")
+} else {
+  plot(mcmc_obj, main = sprintf("%s, drug column %d", gene_to_plot, drug_col_to_plot))
+}
+```
+
+## Interpreting the results
+
+- **If very few parameters are flagged** (a small percentage, and not
+  concentrated in any particular gene cluster): the chain length and
+  thinning you chose are adequate; proceed to use the posterior samples
+  for inference.
+- **If the MSI cluster genes (Step 4 above) are disproportionately
+  flagged relative to other genes**: this is the expected signature of
+  the known correlation structure slowing mixing for those specific
+  genes, not a general sampler problem -- consider running a longer
+  chain (`mcmc_n_iter`) specifically to improve ESS for that cluster, or
+  interpreting their posterior intervals with the correlation in mind
+  (as already recommended in the project progress log's multicollinearity
+  write-up) rather than over-trusting tight-looking but poorly-mixed
+  intervals.
+- **If flags are widespread across unrelated genes**: increase
+  `mcmc_n_iter` and/or `mcmc_thin` (thinning more reduces autocorrelation
+  in the kept samples, at the cost of needing more total iterations for
+  the same number of kept samples) and re-run Part 3 Step 4 before trusting
+  any posterior summary from this fit.
