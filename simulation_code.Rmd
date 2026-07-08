@@ -5,7 +5,7 @@ output: html_document
 
 # Purpose
 
-This R Markdown file contains the simulation-generation and simulation-fitting framework for the no-group-layer simulation study. The main correction is in **Scenario 2**, which is revised to be a cleaner network-prior-favored scenario. Instead of activating only a very small number of connected genes, Scenario 2 now generates a larger network-connected module per drug, with smooth pathway-level effects over the selected module.
+This R Markdown file contains the simulation-generation and simulation-fitting framework for the no-group-layer simulation study.
 
 The intended workflow is:
 
