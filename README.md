@@ -12,15 +12,15 @@ Code accompanying the manuscript:
 | File | Description |
 |------|-------------|
 | `gibbs_sampler.R` | Primary Gibbs sampler for Model I (shared-effect network-horseshoe model). Implements the GIGG-corrected conjugate updates for all parameters. |
-| `gibbs_sampler_full.Rmd` | RMarkdown version of the primary sampler with full inline documentation and derivations. |
-| `real_data_group_layer_v2.R` | Gibbs sampler for Model II (tissue-group extension). Implements the group-specific coefficient updates with IG(2,0.5) prior on eta^2 and ridge stabilization. Minimum group size = 50. |
+| `gibbs_sampler_full_AB.Rmd` | RMarkdown version of the primary sampler with full inline documentation and derivations. |
+| `real_data_group_layer_vs_target_storage.R` | Gibbs sampler for Model II (tissue-group extension). Implements the group-specific coefficient updates with IG(2,0.5) prior on eta^2 and ridge stabilization. Minimum group size = 50. |
 
 ### Real Data Analysis
 
 | File | Description |
 |------|-------------|
 | `inspect_real_results.R` | Extracts and summarises primary GDSC2 results from Model I fit objects. |
-| `inspect_group_layer_results_v2.R` | Extracts and summarises tissue-group results from Model II fit objects (K=6). |
+| `scan_tissue_effects_vs_target_posterior.R` | Extracts and summarises tissue-group results from Model II fit objects (K=6). |
 | `inspect_prism_results.R` | Extracts and summarises PRISM/DepMap replication results. |
 | `prism_pipeline.R` | Preprocesses PRISM data for compatibility with the model framework. |
 
@@ -61,7 +61,7 @@ KEGG pathway data: https://www.genome.jp/kegg
 
 ## Key Implementation Notes
 
-1. **GIGG correction:** Both global variance components (kappa^2, zeta^2) are parameterized through their precisions with Gamma(1,1) priors. Do NOT revert to IG(0.01,0.01) on the variances directly — this causes both to collapse to zero.
+1. **GIGG:** Both global variance components (kappa^2, zeta^2) are parameterized through their precisions with Gamma(1,1) priors. Do NOT revert to IG(0.01,0.01) on the variances directly — this causes both to collapse to zero.
 
 2. **Adjacency matrix:** Always use `gene_adjacency_W.csv` (gene-level, 135 nodes). Do not use pathway-level adjacency.
 
