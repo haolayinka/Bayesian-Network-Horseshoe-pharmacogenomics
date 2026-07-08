@@ -1191,24 +1191,3 @@ if (is.null(mcmc_obj)) {
   plot(mcmc_obj, main = sprintf("%s, drug column %d", gene_to_plot, drug_col_to_plot))
 }
 ```
-
-## Interpreting the results
-
-- **If very few parameters are flagged** (a small percentage, and not
-  concentrated in any particular gene cluster): the chain length and
-  thinning you chose are adequate; proceed to use the posterior samples
-  for inference.
-- **If the MSI cluster genes (Step 4 above) are disproportionately
-  flagged relative to other genes**: this is the expected signature of
-  the known correlation structure slowing mixing for those specific
-  genes, not a general sampler problem -- consider running a longer
-  chain (`mcmc_n_iter`) specifically to improve ESS for that cluster, or
-  interpreting their posterior intervals with the correlation in mind
-  (as already recommended in the project progress log's multicollinearity
-  write-up) rather than over-trusting tight-looking but poorly-mixed
-  intervals.
-- **If flags are widespread across unrelated genes**: increase
-  `mcmc_n_iter` and/or `mcmc_thin` (thinning more reduces autocorrelation
-  in the kept samples, at the cost of needing more total iterations for
-  the same number of kept samples) and re-run Part 3 Step 4 before trusting
-  any posterior summary from this fit.
