@@ -1,0 +1,1050 @@
+pathway,gene_symbol
+ABC transporters,ABCB1
+AGE-RAGE signaling pathway in diabetic complications,BAX
+AGE-RAGE signaling pathway in diabetic complications,FN1
+AGE-RAGE signaling pathway in diabetic complications,KRAS
+AGE-RAGE signaling pathway in diabetic complications,NRAS
+AGE-RAGE signaling pathway in diabetic complications,PIK3CA
+AGE-RAGE signaling pathway in diabetic complications,PIK3CB
+AGE-RAGE signaling pathway in diabetic complications,PIK3R1
+AGE-RAGE signaling pathway in diabetic complications,SMAD4
+AGE-RAGE signaling pathway in diabetic complications,STAT3
+AGE-RAGE signaling pathway in diabetic complications,STAT5B
+AGE-RAGE signaling pathway in diabetic complications,TGFBR2
+AMPK signaling pathway,IRS4
+AMPK signaling pathway,PIK3CA
+AMPK signaling pathway,PIK3CB
+AMPK signaling pathway,PIK3R1
+AMPK signaling pathway,STK11
+AMPK signaling pathway,TSC1
+AMPK signaling pathway,TSC2
+Adherens junction,CDH1
+Adherens junction,CREBBP
+Adherens junction,CTNNB1
+Adherens junction,EGFR
+Adherens junction,EP300
+Adherens junction,ERBB2
+Adherens junction,MET
+Adherens junction,PTPN6
+Adherens junction,PTPRB
+Adherens junction,RHOA
+Adherens junction,SMAD4
+Adherens junction,TGFBR2
+Adipocytokine signaling pathway,IRS4
+Adipocytokine signaling pathway,PTPN11
+Adipocytokine signaling pathway,STAT3
+Adipocytokine signaling pathway,STK11
+Adrenergic signaling in cardiomyocytes,CACNA1D
+Alcoholism,BRAF
+Alcoholism,GRIN2A
+Alcoholism,KRAS
+Alcoholism,MAP2K1
+Alcoholism,NRAS
+Aldosterone synthesis and secretion,CACNA1D
+Aldosterone synthesis and secretion,PRKD2
+Aldosterone-regulated sodium reabsorption,KRAS
+Aldosterone-regulated sodium reabsorption,PIK3CA
+Aldosterone-regulated sodium reabsorption,PIK3CB
+Aldosterone-regulated sodium reabsorption,PIK3R1
+Antigen processing and presentation,B2M
+Antigen processing and presentation,CIITA
+Antigen processing and presentation,HLA-A
+Antigen processing and presentation,HLA-B
+Apelin signaling pathway,CDH1
+Apelin signaling pathway,GNA13
+Apelin signaling pathway,KRAS
+Apelin signaling pathway,MAP2K1
+Apelin signaling pathway,NRAS
+Apelin signaling pathway,SMAD4
+Apoptosis,ATM
+Apoptosis,BAX
+Apoptosis,BIRC6
+Apoptosis,CASP8
+Apoptosis,KRAS
+Apoptosis,MAP2K1
+Apoptosis,NRAS
+Apoptosis,NTRK1
+Apoptosis,PARP4
+Apoptosis,PIK3CA
+Apoptosis,PIK3CB
+Apoptosis,PIK3R1
+Apoptosis,PTPN13
+Apoptosis,TP53
+Autophagy,IRS4
+Autophagy,KRAS
+Autophagy,MAP2K1
+Autophagy,NRAS
+Autophagy,PIK3CA
+Autophagy,PIK3CB
+Autophagy,PIK3R1
+Autophagy,PTEN
+Autophagy,STK11
+Autophagy,TSC1
+Autophagy,TSC2
+Axon guidance,ARHGEF12
+Axon guidance,BMPR2
+Axon guidance,DCC
+Axon guidance,EPHA2
+Axon guidance,EPHA3
+Axon guidance,EPHA7
+Axon guidance,FES
+Axon guidance,KRAS
+Axon guidance,MET
+Axon guidance,NRAS
+Axon guidance,PIK3CA
+Axon guidance,PIK3CB
+Axon guidance,PIK3R1
+Axon guidance,PTCH1
+Axon guidance,PTPN11
+Axon guidance,RASA1
+Axon guidance,RHOA
+B cell receptor signaling pathway,CARD11
+B cell receptor signaling pathway,KRAS
+B cell receptor signaling pathway,MAP2K1
+B cell receptor signaling pathway,NRAS
+B cell receptor signaling pathway,PIK3CA
+B cell receptor signaling pathway,PIK3CB
+B cell receptor signaling pathway,PIK3R1
+B cell receptor signaling pathway,PTPN6
+Bacterial invasion of epithelial cells,CDH1
+Bacterial invasion of epithelial cells,CLTC
+Bacterial invasion of epithelial cells,CLTCL1
+Bacterial invasion of epithelial cells,CTNNB1
+Bacterial invasion of epithelial cells,FN1
+Bacterial invasion of epithelial cells,MET
+Bacterial invasion of epithelial cells,PIK3CA
+Bacterial invasion of epithelial cells,PIK3CB
+Bacterial invasion of epithelial cells,PIK3R1
+Bacterial invasion of epithelial cells,RHOA
+Basal transcription factors,TAF15
+Base excision repair,MUTYH
+Base excision repair,PARP4
+Base excision repair,POLD1
+Base excision repair,POLE
+Bile secretion,ABCB1
+C-type lectin receptor signaling pathway,ARHGEF12
+C-type lectin receptor signaling pathway,CASP8
+C-type lectin receptor signaling pathway,KRAS
+C-type lectin receptor signaling pathway,NRAS
+C-type lectin receptor signaling pathway,PIK3CA
+C-type lectin receptor signaling pathway,PIK3CB
+C-type lectin receptor signaling pathway,PIK3R1
+C-type lectin receptor signaling pathway,PTPN11
+C-type lectin receptor signaling pathway,RHOA
+Calcium signaling pathway,CACNA1D
+Calcium signaling pathway,EGFR
+Calcium signaling pathway,ERBB2
+Calcium signaling pathway,ERBB3
+Calcium signaling pathway,ERBB4
+Calcium signaling pathway,FGFR4
+Calcium signaling pathway,FLT4
+Calcium signaling pathway,GRIN2A
+Calcium signaling pathway,MET
+Calcium signaling pathway,NTRK1
+Cardiac muscle contraction,CACNA1D
+Cell adhesion molecules,CDH1
+Cell adhesion molecules,HLA-A
+Cell adhesion molecules,HLA-B
+Cell adhesion molecules,PTPRC
+Cell cycle,ATM
+Cell cycle,ATR
+Cell cycle,CDKN2A
+Cell cycle,CREBBP
+Cell cycle,EP300
+Cell cycle,MYC
+Cell cycle,RB1
+Cell cycle,SMAD4
+Cell cycle,STAG2
+Cell cycle,TP53
+Cellular senescence,ATM
+Cellular senescence,ATR
+Cellular senescence,CACNA1D
+Cellular senescence,CDKN2A
+Cellular senescence,HLA-A
+Cellular senescence,HLA-B
+Cellular senescence,KRAS
+Cellular senescence,MAP2K1
+Cellular senescence,MYC
+Cellular senescence,NBN
+Cellular senescence,NRAS
+Cellular senescence,PIK3CA
+Cellular senescence,PIK3CB
+Cellular senescence,PIK3R1
+Cellular senescence,PTEN
+Cellular senescence,RB1
+Cellular senescence,TGFBR2
+Cellular senescence,TP53
+Cellular senescence,TSC1
+Cellular senescence,TSC2
+Chemical carcinogenesis,CACNA1D
+Chemical carcinogenesis,EGFR
+Chemical carcinogenesis,KRAS
+Chemical carcinogenesis,MAP2K1
+Chemical carcinogenesis,MYC
+Chemical carcinogenesis,NOTCH2
+Chemical carcinogenesis,NRAS
+Chemical carcinogenesis,PIK3CA
+Chemical carcinogenesis,PIK3CB
+Chemical carcinogenesis,PIK3R1
+Chemical carcinogenesis,RB1
+Chemical carcinogenesis,STAT3
+Chemical carcinogenesis,STAT5B
+Chemokine signaling pathway,BRAF
+Chemokine signaling pathway,JAK3
+Chemokine signaling pathway,KRAS
+Chemokine signaling pathway,MAP2K1
+Chemokine signaling pathway,NRAS
+Chemokine signaling pathway,PIK3CA
+Chemokine signaling pathway,PIK3CB
+Chemokine signaling pathway,PIK3R1
+Chemokine signaling pathway,RHOA
+Chemokine signaling pathway,STAT3
+Chemokine signaling pathway,STAT5B
+Cholinergic synapse,CACNA1D
+Cholinergic synapse,KRAS
+Cholinergic synapse,MAP2K1
+Cholinergic synapse,NRAS
+Cholinergic synapse,PIK3CA
+Cholinergic synapse,PIK3CB
+Cholinergic synapse,PIK3R1
+Circadian entrainment,CACNA1D
+Circadian entrainment,GRIN2A
+Complement and coagulation cascades,CR1
+Cortisol synthesis and secretion,CACNA1D
+Cytokine-cytokine receptor interaction,ACVR2A
+Cytokine-cytokine receptor interaction,BMPR2
+Cytokine-cytokine receptor interaction,TGFBR2
+DNA replication,POLD1
+DNA replication,POLE
+Dopaminergic synapse,CACNA1D
+Dopaminergic synapse,GRIN2A
+ECM-receptor interaction,FN1
+ECM-receptor interaction,HSPG2
+Endocrine and other factor-regulated calcium reabsorption,CLTC
+Endocrine and other factor-regulated calcium reabsorption,CLTCL1
+Endocytosis,CBLC
+Endocytosis,CLTC
+Endocytosis,CLTCL1
+Endocytosis,EGFR
+Endocytosis,FGFR4
+Endocytosis,HLA-A
+Endocytosis,HLA-B
+Endocytosis,PML
+Endocytosis,RHOA
+Endocytosis,TGFBR2
+Endocytosis,USP8
+ErbB signaling pathway,BRAF
+ErbB signaling pathway,EGFR
+ErbB signaling pathway,ERBB2
+ErbB signaling pathway,ERBB3
+ErbB signaling pathway,ERBB4
+ErbB signaling pathway,KRAS
+ErbB signaling pathway,MAP2K1
+ErbB signaling pathway,MAP2K4
+ErbB signaling pathway,MAP2K7
+ErbB signaling pathway,MYC
+ErbB signaling pathway,NRAS
+ErbB signaling pathway,PIK3CA
+ErbB signaling pathway,PIK3CB
+ErbB signaling pathway,PIK3R1
+ErbB signaling pathway,STAT5B
+Estrogen signaling pathway,EGFR
+Estrogen signaling pathway,KRAS
+Estrogen signaling pathway,MAP2K1
+Estrogen signaling pathway,NRAS
+Estrogen signaling pathway,PIK3CA
+Estrogen signaling pathway,PIK3CB
+Estrogen signaling pathway,PIK3R1
+Fanconi anemia pathway,ATR
+Fanconi anemia pathway,BRCA1
+Fanconi anemia pathway,BRCA2
+Fanconi anemia pathway,BRIP1
+Fanconi anemia pathway,FANCA
+Fanconi anemia pathway,MLH1
+Fanconi anemia pathway,PMS2
+Fc epsilon RI signaling pathway,KRAS
+Fc epsilon RI signaling pathway,MAP2K1
+Fc epsilon RI signaling pathway,MAP2K4
+Fc epsilon RI signaling pathway,MAP2K7
+Fc epsilon RI signaling pathway,NRAS
+Fc epsilon RI signaling pathway,PIK3CA
+Fc epsilon RI signaling pathway,PIK3CB
+Fc epsilon RI signaling pathway,PIK3R1
+Fc gamma R-mediated phagocytosis,MAP2K1
+Fc gamma R-mediated phagocytosis,PIK3CA
+Fc gamma R-mediated phagocytosis,PIK3CB
+Fc gamma R-mediated phagocytosis,PIK3R1
+Fc gamma R-mediated phagocytosis,PTPRC
+Ferroptosis,TP53
+Focal adhesion,ARHGAP35
+Focal adhesion,ARHGAP5
+Focal adhesion,BRAF
+Focal adhesion,CTNNB1
+Focal adhesion,EGFR
+Focal adhesion,ERBB2
+Focal adhesion,FLT4
+Focal adhesion,FN1
+Focal adhesion,MAP2K1
+Focal adhesion,MET
+Focal adhesion,PIK3CA
+Focal adhesion,PIK3CB
+Focal adhesion,PIK3R1
+Focal adhesion,PTEN
+Focal adhesion,RHOA
+FoxO signaling pathway,ATM
+FoxO signaling pathway,BRAF
+FoxO signaling pathway,CREBBP
+FoxO signaling pathway,EGFR
+FoxO signaling pathway,EP300
+FoxO signaling pathway,IRS4
+FoxO signaling pathway,KRAS
+FoxO signaling pathway,MAP2K1
+FoxO signaling pathway,NRAS
+FoxO signaling pathway,PIK3CA
+FoxO signaling pathway,PIK3CB
+FoxO signaling pathway,PIK3R1
+FoxO signaling pathway,PTEN
+FoxO signaling pathway,SMAD4
+FoxO signaling pathway,STAT3
+FoxO signaling pathway,STK11
+FoxO signaling pathway,TGFBR2
+GABAergic synapse,CACNA1D
+Gap junction,EGFR
+Gap junction,KRAS
+Gap junction,MAP2K1
+Gap junction,NRAS
+Glioma,BAX
+Glioma,BRAF
+Glioma,CDKN2A
+Glioma,EGFR
+Glioma,KRAS
+Glioma,MAP2K1
+Glioma,NRAS
+Glioma,PIK3CA
+Glioma,PIK3CB
+Glioma,PIK3R1
+Glioma,PTEN
+Glioma,RB1
+Glioma,TP53
+Glucagon signaling pathway,CREBBP
+Glucagon signaling pathway,EP300
+Glutamatergic synapse,CACNA1D
+Glutamatergic synapse,GRIN2A
+GnRH secretion,CACNA1D
+GnRH secretion,KRAS
+GnRH secretion,MAP2K1
+GnRH secretion,NRAS
+GnRH secretion,PIK3CA
+GnRH secretion,PIK3CB
+GnRH secretion,PIK3R1
+GnRH signaling pathway,CACNA1D
+GnRH signaling pathway,EGFR
+GnRH signaling pathway,KRAS
+GnRH signaling pathway,MAP2K1
+GnRH signaling pathway,MAP2K4
+GnRH signaling pathway,MAP2K7
+GnRH signaling pathway,NRAS
+"Growth hormone synthesis, secretion and action",CACNA1D
+"Growth hormone synthesis, secretion and action",CREBBP
+"Growth hormone synthesis, secretion and action",EP300
+"Growth hormone synthesis, secretion and action",IRS4
+"Growth hormone synthesis, secretion and action",KRAS
+"Growth hormone synthesis, secretion and action",MAP2K1
+"Growth hormone synthesis, secretion and action",MAP2K4
+"Growth hormone synthesis, secretion and action",NRAS
+"Growth hormone synthesis, secretion and action",PIK3CA
+"Growth hormone synthesis, secretion and action",PIK3CB
+"Growth hormone synthesis, secretion and action",PIK3R1
+"Growth hormone synthesis, secretion and action",STAT3
+"Growth hormone synthesis, secretion and action",STAT5B
+HIF-1 signaling pathway,CREBBP
+HIF-1 signaling pathway,EGFR
+HIF-1 signaling pathway,EP300
+HIF-1 signaling pathway,ERBB2
+HIF-1 signaling pathway,MAP2K1
+HIF-1 signaling pathway,PIK3CA
+HIF-1 signaling pathway,PIK3CB
+HIF-1 signaling pathway,PIK3R1
+HIF-1 signaling pathway,STAT3
+HIF-1 signaling pathway,VHL
+Hedgehog signaling pathway,PTCH1
+Hematopoietic cell lineage,CR1
+Hepatitis B,BAX
+Hepatitis B,BRAF
+Hepatitis B,CASP8
+Hepatitis B,CREBBP
+Hepatitis B,DDX3X
+Hepatitis B,EP300
+Hepatitis B,HSPG2
+Hepatitis B,JAK1
+Hepatitis B,JAK3
+Hepatitis B,KRAS
+Hepatitis B,MAP2K1
+Hepatitis B,MAP2K4
+Hepatitis B,MAP2K7
+Hepatitis B,MYC
+Hepatitis B,NRAS
+Hepatitis B,PIK3CA
+Hepatitis B,PIK3CB
+Hepatitis B,PIK3R1
+Hepatitis B,RB1
+Hepatitis B,SMAD4
+Hepatitis B,STAT3
+Hepatitis B,STAT5B
+Hepatitis B,TGFBR2
+Hepatitis B,TP53
+Hepatitis C,BAX
+Hepatitis C,BRAF
+Hepatitis C,CASP8
+Hepatitis C,CTNNB1
+Hepatitis C,EGFR
+Hepatitis C,JAK1
+Hepatitis C,KRAS
+Hepatitis C,MAP2K1
+Hepatitis C,MYC
+Hepatitis C,NRAS
+Hepatitis C,PIK3CA
+Hepatitis C,PIK3CB
+Hepatitis C,PIK3R1
+Hepatitis C,RB1
+Hepatitis C,STAT3
+Hepatitis C,TP53
+Hippo signaling pathway,AJUBA
+Hippo signaling pathway,APC
+Hippo signaling pathway,AXIN1
+Hippo signaling pathway,AXIN2
+Hippo signaling pathway,BMPR2
+Hippo signaling pathway,CDH1
+Hippo signaling pathway,CTNNB1
+Hippo signaling pathway,FAT4
+Hippo signaling pathway,LATS1
+Hippo signaling pathway,LATS2
+Hippo signaling pathway,MYC
+Hippo signaling pathway,NF2
+Hippo signaling pathway,SMAD4
+Hippo signaling pathway,TGFBR2
+Homologous recombination,ATM
+Homologous recombination,BRCA1
+Homologous recombination,BRCA2
+Homologous recombination,BRIP1
+Homologous recombination,NBN
+Homologous recombination,POLD1
+IL-17 signaling pathway,CASP8
+IL-17 signaling pathway,TNFAIP3
+Inflammatory mediator regulation of TRP channels,NTRK1
+Inflammatory mediator regulation of TRP channels,PIK3CA
+Inflammatory mediator regulation of TRP channels,PIK3CB
+Inflammatory mediator regulation of TRP channels,PIK3R1
+Influenza A,BAX
+Influenza A,CASP8
+Influenza A,CIITA
+Influenza A,CREBBP
+Influenza A,EP300
+Influenza A,JAK1
+Influenza A,MAP2K1
+Influenza A,PIK3CA
+Influenza A,PIK3CB
+Influenza A,PIK3R1
+Influenza A,PML
+Insulin resistance,PIK3CA
+Insulin resistance,PIK3CB
+Insulin resistance,PIK3R1
+Insulin resistance,PTEN
+Insulin resistance,PTPN11
+Insulin resistance,STAT3
+Insulin secretion,CACNA1D
+Insulin signaling pathway,BRAF
+Insulin signaling pathway,IRS4
+Insulin signaling pathway,KRAS
+Insulin signaling pathway,MAP2K1
+Insulin signaling pathway,NRAS
+Insulin signaling pathway,PIK3CA
+Insulin signaling pathway,PIK3CB
+Insulin signaling pathway,PIK3R1
+Insulin signaling pathway,TSC1
+Insulin signaling pathway,TSC2
+JAK-STAT signaling pathway,CREBBP
+JAK-STAT signaling pathway,EGFR
+JAK-STAT signaling pathway,EP300
+JAK-STAT signaling pathway,JAK1
+JAK-STAT signaling pathway,JAK3
+JAK-STAT signaling pathway,MYC
+JAK-STAT signaling pathway,PIK3CA
+JAK-STAT signaling pathway,PIK3CB
+JAK-STAT signaling pathway,PIK3R1
+JAK-STAT signaling pathway,PTPN11
+JAK-STAT signaling pathway,PTPN6
+JAK-STAT signaling pathway,STAT3
+JAK-STAT signaling pathway,STAT5B
+Legionellosis,CASP8
+Legionellosis,CR1
+Leishmaniasis,CR1
+Leishmaniasis,JAK1
+Leishmaniasis,PTPN6
+Leukocyte transendothelial migration,ARHGAP35
+Leukocyte transendothelial migration,ARHGAP5
+Leukocyte transendothelial migration,CTNNB1
+Leukocyte transendothelial migration,PIK3CA
+Leukocyte transendothelial migration,PIK3CB
+Leukocyte transendothelial migration,PIK3R1
+Leukocyte transendothelial migration,PTPN11
+Leukocyte transendothelial migration,RHOA
+Long-term depression,BRAF
+Long-term depression,GNA13
+Long-term depression,KRAS
+Long-term depression,MAP2K1
+Long-term depression,NRAS
+Long-term potentiation,BRAF
+Long-term potentiation,CREBBP
+Long-term potentiation,EP300
+Long-term potentiation,GRIN2A
+Long-term potentiation,KRAS
+Long-term potentiation,MAP2K1
+Long-term potentiation,NRAS
+Longevity regulating pathway,BAX
+Longevity regulating pathway,IRS4
+Longevity regulating pathway,KRAS
+Longevity regulating pathway,NRAS
+Longevity regulating pathway,PIK3CA
+Longevity regulating pathway,PIK3CB
+Longevity regulating pathway,PIK3R1
+Longevity regulating pathway,STK11
+Longevity regulating pathway,TP53
+Longevity regulating pathway,TSC1
+Longevity regulating pathway,TSC2
+Lysosome,CLTC
+Lysosome,CLTCL1
+MAPK signaling pathway,BRAF
+MAPK signaling pathway,CACNA1D
+MAPK signaling pathway,EGFR
+MAPK signaling pathway,EPHA2
+MAPK signaling pathway,ERBB2
+MAPK signaling pathway,ERBB3
+MAPK signaling pathway,ERBB4
+MAPK signaling pathway,FGFR4
+MAPK signaling pathway,FLT4
+MAPK signaling pathway,KRAS
+MAPK signaling pathway,MAP2K1
+MAPK signaling pathway,MAP2K4
+MAPK signaling pathway,MAP2K7
+MAPK signaling pathway,MAP3K13
+MAPK signaling pathway,MET
+MAPK signaling pathway,MYC
+MAPK signaling pathway,NF1
+MAPK signaling pathway,NRAS
+MAPK signaling pathway,NTRK1
+MAPK signaling pathway,RASA1
+MAPK signaling pathway,RASA2
+MAPK signaling pathway,TGFBR2
+MAPK signaling pathway,TP53
+Malaria,CR1
+Malaria,MET
+Measles,BAX
+Measles,CASP8
+Measles,JAK1
+Measles,JAK3
+Measles,PIK3CA
+Measles,PIK3CB
+Measles,PIK3R1
+Measles,STAT3
+Measles,STAT5B
+Measles,TNFAIP3
+Measles,TP53
+Melanogenesis,CREBBP
+Melanogenesis,CTNNB1
+Melanogenesis,EP300
+Melanogenesis,KRAS
+Melanogenesis,MAP2K1
+Melanogenesis,NRAS
+Mismatch repair,MLH1
+Mismatch repair,MSH2
+Mismatch repair,MSH6
+Mismatch repair,PMS2
+Mismatch repair,POLD1
+Mitophagy,KRAS
+Mitophagy,NRAS
+Mitophagy,TP53
+Mitophagy,USP8
+NF-kappa B signaling pathway,ATM
+NF-kappa B signaling pathway,CARD11
+NF-kappa B signaling pathway,TNFAIP3
+NOD-like receptor signaling pathway,CASP8
+NOD-like receptor signaling pathway,JAK1
+NOD-like receptor signaling pathway,RHOA
+NOD-like receptor signaling pathway,TNFAIP3
+Natural killer cell mediated cytotoxicity,BRAF
+Natural killer cell mediated cytotoxicity,HLA-A
+Natural killer cell mediated cytotoxicity,HLA-B
+Natural killer cell mediated cytotoxicity,KRAS
+Natural killer cell mediated cytotoxicity,MAP2K1
+Natural killer cell mediated cytotoxicity,NRAS
+Natural killer cell mediated cytotoxicity,PIK3CA
+Natural killer cell mediated cytotoxicity,PIK3CB
+Natural killer cell mediated cytotoxicity,PIK3R1
+Natural killer cell mediated cytotoxicity,PTPN11
+Natural killer cell mediated cytotoxicity,PTPN6
+Necroptosis,BAX
+Necroptosis,CASP8
+Necroptosis,JAK1
+Necroptosis,JAK3
+Necroptosis,STAT3
+Necroptosis,STAT5B
+Necroptosis,TNFAIP3
+Neuroactive ligand-receptor interaction,GRIN2A
+Neurotrophin signaling pathway,BAX
+Neurotrophin signaling pathway,BRAF
+Neurotrophin signaling pathway,KRAS
+Neurotrophin signaling pathway,MAP2K1
+Neurotrophin signaling pathway,MAP2K7
+Neurotrophin signaling pathway,NRAS
+Neurotrophin signaling pathway,NTRK1
+Neurotrophin signaling pathway,PIK3CA
+Neurotrophin signaling pathway,PIK3CB
+Neurotrophin signaling pathway,PIK3R1
+Neurotrophin signaling pathway,PTPN11
+Neurotrophin signaling pathway,RHOA
+Neurotrophin signaling pathway,TP53
+Neutrophil extracellular trap formation,CR1
+Neutrophil extracellular trap formation,MAP2K1
+Neutrophil extracellular trap formation,PIK3CA
+Neutrophil extracellular trap formation,PIK3CB
+Neutrophil extracellular trap formation,PIK3R1
+Notch signaling pathway,CREBBP
+Notch signaling pathway,EP300
+Notch signaling pathway,NCOR2
+Notch signaling pathway,NOTCH1
+Notch signaling pathway,NOTCH2
+Nucleotide excision repair,POLD1
+Nucleotide excision repair,POLE
+Oocyte meiosis,MAP2K1
+Osteoclast differentiation,JAK1
+Osteoclast differentiation,MAP2K1
+Osteoclast differentiation,MAP2K7
+Osteoclast differentiation,PIK3CA
+Osteoclast differentiation,PIK3CB
+Osteoclast differentiation,PIK3R1
+Osteoclast differentiation,TGFBR2
+Oxytocin signaling pathway,CACNA1D
+Oxytocin signaling pathway,EGFR
+Oxytocin signaling pathway,KRAS
+Oxytocin signaling pathway,MAP2K1
+Oxytocin signaling pathway,NRAS
+Oxytocin signaling pathway,RHOA
+PI3K-Akt signaling pathway,BRCA1
+PI3K-Akt signaling pathway,EGFR
+PI3K-Akt signaling pathway,EPHA2
+PI3K-Akt signaling pathway,ERBB2
+PI3K-Akt signaling pathway,ERBB3
+PI3K-Akt signaling pathway,ERBB4
+PI3K-Akt signaling pathway,FGFR4
+PI3K-Akt signaling pathway,FLT4
+PI3K-Akt signaling pathway,FN1
+PI3K-Akt signaling pathway,JAK1
+PI3K-Akt signaling pathway,JAK3
+PI3K-Akt signaling pathway,KRAS
+PI3K-Akt signaling pathway,MAP2K1
+PI3K-Akt signaling pathway,MET
+PI3K-Akt signaling pathway,MYC
+PI3K-Akt signaling pathway,NRAS
+PI3K-Akt signaling pathway,NTRK1
+PI3K-Akt signaling pathway,PIK3CA
+PI3K-Akt signaling pathway,PIK3CB
+PI3K-Akt signaling pathway,PIK3R1
+PI3K-Akt signaling pathway,PTEN
+PI3K-Akt signaling pathway,STK11
+PI3K-Akt signaling pathway,TP53
+PI3K-Akt signaling pathway,TSC1
+PI3K-Akt signaling pathway,TSC2
+Pancreatic secretion,RHOA
+"Parathyroid hormone synthesis, secretion and action",BRAF
+"Parathyroid hormone synthesis, secretion and action",EGFR
+"Parathyroid hormone synthesis, secretion and action",GNA13
+"Parathyroid hormone synthesis, secretion and action",MAP2K1
+"Parathyroid hormone synthesis, secretion and action",RHOA
+Pathways of neurodegeneration,APC
+Pathways of neurodegeneration,AXIN1
+Pathways of neurodegeneration,AXIN2
+Pathways of neurodegeneration,BAX
+Pathways of neurodegeneration,BRAF
+Pathways of neurodegeneration,CACNA1D
+Pathways of neurodegeneration,CASP8
+Pathways of neurodegeneration,CTNNB1
+Pathways of neurodegeneration,GRIN2A
+Pathways of neurodegeneration,KRAS
+Pathways of neurodegeneration,MAP2K1
+Pathways of neurodegeneration,MAP2K7
+Pathways of neurodegeneration,NRAS
+Pathways of neurodegeneration,SDHA
+Pertussis,RHOA
+Phagosome,HLA-A
+Phagosome,HLA-B
+Phosphatidylinositol signaling system,PIK3CA
+Phosphatidylinositol signaling system,PIK3CB
+Phosphatidylinositol signaling system,PIK3R1
+Phosphatidylinositol signaling system,PTEN
+Phospholipase D signaling pathway,EGFR
+Phospholipase D signaling pathway,GNA13
+Phospholipase D signaling pathway,KRAS
+Phospholipase D signaling pathway,MAP2K1
+Phospholipase D signaling pathway,NRAS
+Phospholipase D signaling pathway,PIK3CA
+Phospholipase D signaling pathway,PIK3CB
+Phospholipase D signaling pathway,PIK3R1
+Phospholipase D signaling pathway,PTPN11
+Phospholipase D signaling pathway,RHOA
+Phospholipase D signaling pathway,TSC1
+Phospholipase D signaling pathway,TSC2
+Platelet activation,ARHGAP35
+Platelet activation,ARHGEF12
+Platelet activation,GNA13
+Platelet activation,PIK3CA
+Platelet activation,PIK3CB
+Platelet activation,PIK3R1
+Platelet activation,RHOA
+Primary immunodeficiency,CIITA
+Primary immunodeficiency,JAK3
+Primary immunodeficiency,PTPRC
+Progesterone-mediated oocyte maturation,BRAF
+Progesterone-mediated oocyte maturation,KRAS
+Progesterone-mediated oocyte maturation,MAP2K1
+Progesterone-mediated oocyte maturation,PIK3CA
+Progesterone-mediated oocyte maturation,PIK3CB
+Progesterone-mediated oocyte maturation,PIK3R1
+Prolactin signaling pathway,KRAS
+Prolactin signaling pathway,MAP2K1
+Prolactin signaling pathway,NRAS
+Prolactin signaling pathway,PIK3CA
+Prolactin signaling pathway,PIK3CB
+Prolactin signaling pathway,PIK3R1
+Prolactin signaling pathway,STAT3
+Prolactin signaling pathway,STAT5B
+Protein processing in endoplasmic reticulum,BAX
+Protein processing in endoplasmic reticulum,MAP2K7
+Protein processing in endoplasmic reticulum,NFE2L2
+Proteoglycans in cancer,ARHGEF12
+Proteoglycans in cancer,BRAF
+Proteoglycans in cancer,CTNNB1
+Proteoglycans in cancer,EGFR
+Proteoglycans in cancer,ERBB2
+Proteoglycans in cancer,ERBB3
+Proteoglycans in cancer,ERBB4
+Proteoglycans in cancer,FN1
+Proteoglycans in cancer,HSPG2
+Proteoglycans in cancer,KRAS
+Proteoglycans in cancer,MAP2K1
+Proteoglycans in cancer,MET
+Proteoglycans in cancer,MYC
+Proteoglycans in cancer,NRAS
+Proteoglycans in cancer,PIK3CA
+Proteoglycans in cancer,PIK3CB
+Proteoglycans in cancer,PIK3R1
+Proteoglycans in cancer,PTCH1
+Proteoglycans in cancer,PTPN11
+Proteoglycans in cancer,PTPN6
+Proteoglycans in cancer,RHOA
+Proteoglycans in cancer,STAT3
+Proteoglycans in cancer,TP53
+RIG-I-like receptor signaling pathway,CASP8
+RIG-I-like receptor signaling pathway,DDX3X
+RNA transport,PABPC1
+Rap1 signaling pathway,BRAF
+Rap1 signaling pathway,CDH1
+Rap1 signaling pathway,CTNNB1
+Rap1 signaling pathway,EGFR
+Rap1 signaling pathway,EPHA2
+Rap1 signaling pathway,FGFR4
+Rap1 signaling pathway,FLT4
+Rap1 signaling pathway,GRIN2A
+Rap1 signaling pathway,KRAS
+Rap1 signaling pathway,MAP2K1
+Rap1 signaling pathway,MET
+Rap1 signaling pathway,NRAS
+Rap1 signaling pathway,PIK3CA
+Rap1 signaling pathway,PIK3CB
+Rap1 signaling pathway,PIK3R1
+Rap1 signaling pathway,PRKD2
+Rap1 signaling pathway,RHOA
+Ras signaling pathway,EGFR
+Ras signaling pathway,EPHA2
+Ras signaling pathway,FGFR4
+Ras signaling pathway,FLT4
+Ras signaling pathway,GRIN2A
+Ras signaling pathway,KRAS
+Ras signaling pathway,MAP2K1
+Ras signaling pathway,MET
+Ras signaling pathway,NF1
+Ras signaling pathway,NRAS
+Ras signaling pathway,NTRK1
+Ras signaling pathway,PIK3CA
+Ras signaling pathway,PIK3CB
+Ras signaling pathway,PIK3R1
+Ras signaling pathway,PTPN11
+Ras signaling pathway,RASA1
+Ras signaling pathway,RASA2
+Ras signaling pathway,RHOA
+Regulation of actin cytoskeleton,APC
+Regulation of actin cytoskeleton,ARHGAP35
+Regulation of actin cytoskeleton,ARHGEF12
+Regulation of actin cytoskeleton,BRAF
+Regulation of actin cytoskeleton,EGFR
+Regulation of actin cytoskeleton,FGFR4
+Regulation of actin cytoskeleton,FN1
+Regulation of actin cytoskeleton,GNA13
+Regulation of actin cytoskeleton,KRAS
+Regulation of actin cytoskeleton,MAP2K1
+Regulation of actin cytoskeleton,MYH9
+Regulation of actin cytoskeleton,NRAS
+Regulation of actin cytoskeleton,PIK3CA
+Regulation of actin cytoskeleton,PIK3CB
+Regulation of actin cytoskeleton,PIK3R1
+Regulation of actin cytoskeleton,RHOA
+Regulation of lipolysis in adipocytes,IRS4
+Regulation of lipolysis in adipocytes,PIK3CA
+Regulation of lipolysis in adipocytes,PIK3CB
+Regulation of lipolysis in adipocytes,PIK3R1
+Relaxin signaling pathway,EGFR
+Relaxin signaling pathway,KRAS
+Relaxin signaling pathway,MAP2K1
+Relaxin signaling pathway,MAP2K4
+Relaxin signaling pathway,MAP2K7
+Relaxin signaling pathway,NRAS
+Relaxin signaling pathway,PIK3CA
+Relaxin signaling pathway,PIK3CB
+Relaxin signaling pathway,PIK3R1
+Relaxin signaling pathway,TGFBR2
+Renin secretion,CACNA1D
+Retrograde endocannabinoid signaling,CACNA1D
+Serotonergic synapse,BRAF
+Serotonergic synapse,CACNA1D
+Serotonergic synapse,KRAS
+Serotonergic synapse,MAP2K1
+Serotonergic synapse,NRAS
+Signaling pathways regulating pluripotency of stem cells,ACVR2A
+Signaling pathways regulating pluripotency of stem cells,APC
+Signaling pathways regulating pluripotency of stem cells,AXIN1
+Signaling pathways regulating pluripotency of stem cells,AXIN2
+Signaling pathways regulating pluripotency of stem cells,BMPR2
+Signaling pathways regulating pluripotency of stem cells,CTNNB1
+Signaling pathways regulating pluripotency of stem cells,FGFR4
+Signaling pathways regulating pluripotency of stem cells,JAK1
+Signaling pathways regulating pluripotency of stem cells,JAK3
+Signaling pathways regulating pluripotency of stem cells,KRAS
+Signaling pathways regulating pluripotency of stem cells,MAP2K1
+Signaling pathways regulating pluripotency of stem cells,MYC
+Signaling pathways regulating pluripotency of stem cells,NRAS
+Signaling pathways regulating pluripotency of stem cells,PIK3CA
+Signaling pathways regulating pluripotency of stem cells,PIK3CB
+Signaling pathways regulating pluripotency of stem cells,PIK3R1
+Signaling pathways regulating pluripotency of stem cells,SMAD4
+Signaling pathways regulating pluripotency of stem cells,STAT3
+Signaling pathways regulating pluripotency of stem cells,ZFHX3
+Sphingolipid signaling pathway,BAX
+Sphingolipid signaling pathway,GNA13
+Sphingolipid signaling pathway,KRAS
+Sphingolipid signaling pathway,MAP2K1
+Sphingolipid signaling pathway,NRAS
+Sphingolipid signaling pathway,PIK3CA
+Sphingolipid signaling pathway,PIK3CB
+Sphingolipid signaling pathway,PIK3R1
+Sphingolipid signaling pathway,PTEN
+Sphingolipid signaling pathway,RHOA
+Sphingolipid signaling pathway,TP53
+Spinocerebellar ataxia,CIC
+Spinocerebellar ataxia,GRIN2A
+Spinocerebellar ataxia,PIK3CA
+Spinocerebellar ataxia,PIK3CB
+Spinocerebellar ataxia,PIK3R1
+Synaptic vesicle cycle,CLTC
+Synaptic vesicle cycle,CLTCL1
+T cell receptor signaling pathway,CARD11
+T cell receptor signaling pathway,KRAS
+T cell receptor signaling pathway,MAP2K1
+T cell receptor signaling pathway,MAP2K7
+T cell receptor signaling pathway,NRAS
+T cell receptor signaling pathway,PIK3CA
+T cell receptor signaling pathway,PIK3CB
+T cell receptor signaling pathway,PIK3R1
+T cell receptor signaling pathway,PTPN6
+T cell receptor signaling pathway,PTPRC
+T cell receptor signaling pathway,RHOA
+TGF-beta signaling pathway,ACVR2A
+TGF-beta signaling pathway,BMPR2
+TGF-beta signaling pathway,CREBBP
+TGF-beta signaling pathway,EP300
+TGF-beta signaling pathway,MYC
+TGF-beta signaling pathway,RHOA
+TGF-beta signaling pathway,SMAD4
+TGF-beta signaling pathway,TGFBR2
+TNF signaling pathway,CASP8
+TNF signaling pathway,MAP2K1
+TNF signaling pathway,MAP2K4
+TNF signaling pathway,MAP2K7
+TNF signaling pathway,PIK3CA
+TNF signaling pathway,PIK3CB
+TNF signaling pathway,PIK3R1
+TNF signaling pathway,TNFAIP3
+Th1 and Th2 cell differentiation,JAK1
+Th1 and Th2 cell differentiation,JAK3
+Th1 and Th2 cell differentiation,NOTCH1
+Th1 and Th2 cell differentiation,NOTCH2
+Th1 and Th2 cell differentiation,STAT5B
+Th17 cell differentiation,JAK1
+Th17 cell differentiation,JAK3
+Th17 cell differentiation,SMAD4
+Th17 cell differentiation,STAT3
+Th17 cell differentiation,STAT5B
+Th17 cell differentiation,TGFBR2
+Thermogenesis,ARID1A
+Thermogenesis,ARID1B
+Thermogenesis,KRAS
+Thermogenesis,NRAS
+Thermogenesis,SDHA
+Thermogenesis,SMARCA4
+Thermogenesis,SMARCB1
+Thermogenesis,TSC1
+Thermogenesis,TSC2
+Thyroid hormone signaling pathway,CREBBP
+Thyroid hormone signaling pathway,CTNNB1
+Thyroid hormone signaling pathway,EP300
+Thyroid hormone signaling pathway,KRAS
+Thyroid hormone signaling pathway,MAP2K1
+Thyroid hormone signaling pathway,MED12
+Thyroid hormone signaling pathway,MYC
+Thyroid hormone signaling pathway,NCOR1
+Thyroid hormone signaling pathway,NOTCH1
+Thyroid hormone signaling pathway,NOTCH2
+Thyroid hormone signaling pathway,NRAS
+Thyroid hormone signaling pathway,PIK3CA
+Thyroid hormone signaling pathway,PIK3CB
+Thyroid hormone signaling pathway,PIK3R1
+Thyroid hormone signaling pathway,TP53
+Thyroid hormone signaling pathway,TSC2
+Tight junction,CACNA1D
+Tight junction,ERBB2
+Tight junction,MAP2K7
+Tight junction,MYH9
+Tight junction,NF2
+Tight junction,RHOA
+Tight junction,STK11
+Toll-like receptor signaling pathway,CASP8
+Toll-like receptor signaling pathway,MAP2K1
+Toll-like receptor signaling pathway,MAP2K4
+Toll-like receptor signaling pathway,MAP2K7
+Toll-like receptor signaling pathway,PIK3CA
+Toll-like receptor signaling pathway,PIK3CB
+Toll-like receptor signaling pathway,PIK3R1
+Toxoplasmosis,CASP8
+Toxoplasmosis,CIITA
+Toxoplasmosis,JAK1
+Toxoplasmosis,STAT3
+Transcriptional misregulation in cancer,ATM
+Transcriptional misregulation in cancer,BAX
+Transcriptional misregulation in cancer,DOT1L
+Transcriptional misregulation in cancer,KDM6A
+Transcriptional misregulation in cancer,KMT2A
+Transcriptional misregulation in cancer,MET
+Transcriptional misregulation in cancer,MYC
+Transcriptional misregulation in cancer,NCOR1
+Transcriptional misregulation in cancer,NTRK1
+Transcriptional misregulation in cancer,PML
+Transcriptional misregulation in cancer,TAF15
+Transcriptional misregulation in cancer,TGFBR2
+Transcriptional misregulation in cancer,TP53
+Transcriptional misregulation in cancer,ZEB1
+Ubiquitin mediated proteolysis,BIRC6
+Ubiquitin mediated proteolysis,BRCA1
+Ubiquitin mediated proteolysis,CBLC
+Ubiquitin mediated proteolysis,FBXW7
+Ubiquitin mediated proteolysis,HERC2
+Ubiquitin mediated proteolysis,KEAP1
+Ubiquitin mediated proteolysis,PML
+Ubiquitin mediated proteolysis,UBR5
+Ubiquitin mediated proteolysis,VHL
+VEGF signaling pathway,KRAS
+VEGF signaling pathway,MAP2K1
+VEGF signaling pathway,NRAS
+VEGF signaling pathway,PIK3CA
+VEGF signaling pathway,PIK3CB
+VEGF signaling pathway,PIK3R1
+Vascular smooth muscle contraction,ARHGEF12
+Vascular smooth muscle contraction,BRAF
+Vascular smooth muscle contraction,CACNA1D
+Vascular smooth muscle contraction,GNA13
+Vascular smooth muscle contraction,MAP2K1
+Vascular smooth muscle contraction,MYH9
+Vascular smooth muscle contraction,RHOA
+Viral carcinogenesis,BAX
+Viral carcinogenesis,CASP8
+Viral carcinogenesis,CDKN2A
+Viral carcinogenesis,CHD4
+Viral carcinogenesis,CREBBP
+Viral carcinogenesis,DDX3X
+Viral carcinogenesis,EP300
+Viral carcinogenesis,HLA-A
+Viral carcinogenesis,HLA-B
+Viral carcinogenesis,JAK1
+Viral carcinogenesis,JAK3
+Viral carcinogenesis,KRAS
+Viral carcinogenesis,NRAS
+Viral carcinogenesis,PIK3CA
+Viral carcinogenesis,PIK3CB
+Viral carcinogenesis,PIK3R1
+Viral carcinogenesis,RASA2
+Viral carcinogenesis,RB1
+Viral carcinogenesis,RHOA
+Viral carcinogenesis,STAT3
+Viral carcinogenesis,STAT5B
+Viral carcinogenesis,TP53
+Wnt signaling pathway,APC
+Wnt signaling pathway,AXIN1
+Wnt signaling pathway,AXIN2
+Wnt signaling pathway,CREBBP
+Wnt signaling pathway,CTNNB1
+Wnt signaling pathway,EP300
+Wnt signaling pathway,MYC
+Wnt signaling pathway,RHOA
+Wnt signaling pathway,RNF43
+Wnt signaling pathway,SMAD4
+Wnt signaling pathway,TP53
+cAMP signaling pathway,BRAF
+cAMP signaling pathway,CACNA1D
+cAMP signaling pathway,CREBBP
+cAMP signaling pathway,EP300
+cAMP signaling pathway,GRIN2A
+cAMP signaling pathway,MAP2K1
+cAMP signaling pathway,PIK3CA
+cAMP signaling pathway,PIK3CB
+cAMP signaling pathway,PIK3R1
+cAMP signaling pathway,PTCH1
+cAMP signaling pathway,RHOA
+cAMP signaling pathway,SOX9
+cGMP-PKG signaling pathway,CACNA1D
+cGMP-PKG signaling pathway,GNA13
+cGMP-PKG signaling pathway,IRS4
+cGMP-PKG signaling pathway,MAP2K1
+cGMP-PKG signaling pathway,RHOA
+mRNA surveillance pathway,DAZAP1
+mRNA surveillance pathway,PABPC1
+mTOR signaling pathway,BRAF
+mTOR signaling pathway,CLIP1
+mTOR signaling pathway,FLCN
+mTOR signaling pathway,KRAS
+mTOR signaling pathway,MAP2K1
+mTOR signaling pathway,NRAS
+mTOR signaling pathway,PIK3CA
+mTOR signaling pathway,PIK3CB
+mTOR signaling pathway,PIK3R1
+mTOR signaling pathway,PTEN
+mTOR signaling pathway,RHOA
+mTOR signaling pathway,STK11
+mTOR signaling pathway,TSC1
+mTOR signaling pathway,TSC2
+p53 signaling pathway,ATM
+p53 signaling pathway,ATR
+p53 signaling pathway,BAX
+p53 signaling pathway,CASP8
+p53 signaling pathway,CDKN2A
+p53 signaling pathway,PPM1D
+p53 signaling pathway,PTEN
+p53 signaling pathway,TP53
+p53 signaling pathway,TSC2
