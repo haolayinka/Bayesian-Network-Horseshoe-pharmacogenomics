@@ -1,7 +1,7 @@
 # ============================================================
 # fig2_rmse_decomposed.R
 #
-# Generates Figure 2: RMSE decomposed by true-association status
+# Generates Figure: RMSE decomposed by true-association status
 # (true-nonzero signal pairs vs true-zero null pairs)
 #
 # UPDATE SCENARIO 2 VALUES HERE when new simulation run completes.
