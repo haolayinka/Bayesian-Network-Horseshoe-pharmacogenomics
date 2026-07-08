@@ -44,7 +44,7 @@ all_metrics <- bind_rows(
 
 ## Figure 1: Simulation metrics — box plots across scenarios
 
-```{r fig1, fig.height=6.5, fig.cap="Simulation study results across three scenarios (n=50 replicates each). The full model achieves superior precision and FDR control in all scenarios, at the cost of lower sensitivity — the expected tradeoff for a horseshoe-shrinkage model."}
+```{r fig1, fig.height=6.5, fig.cap="Simulation study results across three scenarios (n=100 replicates each)."}
 box_data <- all_metrics %>%
   select(sc_label, model_lab, sensitivity, precision, fdr) %>%
   pivot_longer(c(sensitivity,precision,fdr), names_to="metric", values_to="value") %>%
@@ -62,7 +62,7 @@ ggplot(box_data, aes(x=model_lab, y=value, fill=model_lab)) +
 
 ## Figure 2: RMSE decomposed by association status
 
-```{r fig2, fig.height=4.5, fig.cap="RMSE decomposed into true-nonzero (3.3\\% of pairs) and true-zero (96.7\\%) subsets. The full model's horseshoe prior achieves the lowest RMSE on true-zero pairs, confirming correct null shrinkage, while the no-network model achieves lower RMSE on true-nonzero pairs due to less shrinkage bias on signal coefficients. Neither model dominates on all subsets simultaneously."}
+```{r fig2, fig.height=4.5, fig.cap="RMSE decomposed into true-nonzero (3.3\\% of pairs) and true-zero (96.7\\%) subsets."}
 rmse_d <- thresh %>%
   select(sc_label, model_lab, rmse_signal, rmse_null) %>%
   pivot_longer(c(rmse_signal,rmse_null), names_to="subset", values_to="rmse") %>%
@@ -81,7 +81,7 @@ ggplot(rmse_d, aes(x=model_lab, y=rmse, fill=model_lab)) +
 
 ## Figure 3: AUC-PR and sensitivity at matched FDR
 
-```{r fig3, fig.height=4.5, fig.cap="Precision-recall AUC and sensitivity at a matched FDR of 10\\%. The no-network model achieves higher AUC-PR because it ranks more true associations highly, but at the cost of substantially lower precision at any fixed threshold (Figure 1). When FDR is controlled at 10\\%, the full model recovers a comparable number of true associations with far fewer false discoveries."}
+```{r fig3, fig.height=4.5, fig.cap="Precision-recall AUC and sensitivity at a matched FDR of 10\\%."}
 auc_d <- thresh %>%
   select(sc_label, model_lab, auc_pr, sens_at_fdr10) %>%
   pivot_longer(c(auc_pr,sens_at_fdr10), names_to="metric", values_to="value") %>%
@@ -101,7 +101,7 @@ ggplot(auc_d, aes(x=model_lab, y=value, fill=model_lab)) +
 
 ## Figure 4: Metric convergence across replicates (full model)
 
-```{r fig4, fig.height=3.5, fig.cap="Cumulative mean of key metrics for the full model as replicates accumulate. All metrics stabilize by n=10 and are essentially unchanged from n=20 to n=50, confirming sufficient Monte Carlo stability."}
+```{r fig4, fig.height=3.5, fig.cap="Cumulative mean of key metrics for the full model as replicates accumulate."}
 conv <- bind_rows(
   s1 %>% mutate(sc_label="Sc.1: Sparse Indep."),
   s2 %>% mutate(sc_label="Sc.2: Network Struct."),
@@ -127,7 +127,7 @@ ggplot(conv, aes(x=replicate, y=value, colour=sc_label)) +
 
 ## Figure 5: Posterior effect distributions for top driver genes (real GDSC2 data)
 
-```{r fig5, fig.height=4, fig.cap="Posterior mean effect sizes for the six most-associated genes in the GDSC2 analysis. Each point represents one associated drug (95\\% CI excludes zero). EZH2 and KMT2D show uniformly negative effects (mutation associated with greater sensitivity). TP53's single association (Nutlin-3a) is positive (resistance), consistent with Nutlin-3a's mechanism requiring functional p53."}
+```{r fig5, fig.height=4, fig.cap="Posterior mean effect sizes for the six most-associated genes in the GDSC2 analysis. Each point represents one associated drug (95\\% CI excludes zero).}
 real_pairs <- read.csv(real_pairs_csv)
 plot_genes <- c("EZH2","KMT2D","ASXL1","TET2","PBRM1","TP53")
 plot_d <- real_pairs %>%
@@ -153,7 +153,7 @@ ggplot(plot_d, aes(x=post_mean, y=gene, colour=gene)) +
 
 ## Figure 6: Delta sensitivity — EZH2 and KMT2D are stable across delta values
 
-```{r fig6, fig.height=3.5, fig.cap="Mean posterior effect size (averaged across associated drugs, $\\pm$1 SD) for EZH2 and KMT2D across all four values of the network-smoothing parameter $\\delta$. Point size is proportional to number of associated drugs. Both genes show negligible variation in effect magnitude, and KMT2D's associated drug set is identical at all four values."}
+```{r fig6, fig.height=3.5, fig.cap="Mean posterior effect size (averaged across associated drugs, $\\pm$1 SD) for EZH2 and KMT2D across all four values of the network-smoothing parameter $\\delta$."}
 delta_files <- list(
   "0.5" = file.path(delta_dir, "included_gene_drug_pairs0.5.csv"),
   "0.7" = file.path(delta_dir, "included_gene_drug_pairs0.7.csv"),
