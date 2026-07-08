@@ -1,0 +1,160 @@
+---
+title: "RMSE Decomposition Table"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(dplyr)
+library(knitr)
+```
+
+```{r compute}
+# ── Configuration ─────────────────────────────────────────────────────────
+# Place this Rmd in the same folder as the pair_scores/ directory.
+# pair_scores/ should contain subfolders:
+#   scenario_1_sparse_independent/full/
+#   scenario_1_sparse_independent/no_network/
+#   scenario_1_sparse_independent/no_horseshoe/
+#   scenario_2_network_structured/...
+#   scenario_3_dense_weak_noise/...
+
+n_reps   <- 50   # number of replicates to use
+scenarios <- list(
+  sc1 = list(dir = "scenario_1_sparse_independent",
+             label = "1: Sparse Independent"),
+  sc2 = list(dir = "scenario_2_network_structured",
+             label = "2: Network Structured"),
+  sc3 = list(dir = "scenario_3_dense_weak_noise",
+             label = "3: Dense Weak Noise")
+)
+models <- c("full", "no_network", "no_horseshoe")
+model_labels <- c(full = "Full", no_network = "No-network",
+                  no_horseshoe = "No-horseshoe")
+
+# ── Compute RMSE subsets for each scenario × model × replicate ────────────
+results <- list()
+
+for (sc_name in names(scenarios)) {
+  sc_dir   <- scenarios[[sc_name]]$dir
+  sc_label <- scenarios[[sc_name]]$label
+
+  for (model in models) {
+    rmse_sig  <- numeric(0)
+    rmse_null <- numeric(0)
+    sens_fdr  <- numeric(0)
+
+    for (rep in seq_len(n_reps)) {
+      fname <- file.path(
+        "pair_scores", sc_dir, model,
+        sprintf("pair_scores_%s_rep%03d_%s.rds", sc_dir, rep, model)
+      )
+      if (!file.exists(fname)) next
+
+      ps <- readRDS(fname)
+
+      # RMSE on true-nonzero pairs
+      sig_idx  <- ps$true_assoc
+      null_idx <- !ps$true_assoc
+
+      if (sum(sig_idx) > 0)
+        rmse_sig  <- c(rmse_sig,
+                       sqrt(mean((ps$beta_hat[sig_idx] -
+                                  ps$beta_true[sig_idx])^2)))
+      if (sum(null_idx) > 0)
+        rmse_null <- c(rmse_null,
+                       sqrt(mean((ps$beta_hat[null_idx] -
+                                  ps$beta_true[null_idx])^2)))
+
+      # Sensitivity at matched FDR <= 10%
+      ord <- order(-ps$sign_prob)
+      tp  <- cumsum(ps$true_assoc[ord])
+      fp  <- cumsum(!ps$true_assoc[ord])
+      fdr <- fp / (tp + fp)
+      valid <- which(fdr <= 0.10)
+      if (length(valid) > 0) {
+        k <- max(valid)
+        sens_fdr <- c(sens_fdr, tp[k] / sum(ps$true_assoc))
+      } else {
+        sens_fdr <- c(sens_fdr, 0)
+      }
+    }
+
+    results[[paste(sc_name, model)]] <- data.frame(
+      scenario      = sc_label,
+      model         = model_labels[model],
+      rmse_signal   = mean(rmse_sig),
+      rmse_null     = mean(rmse_null),
+      sens_fdr10    = mean(sens_fdr),
+      n_reps        = length(rmse_sig)
+    )
+  }
+}
+
+res <- do.call(rbind, results)
+rownames(res) <- NULL
+```
+
+```{r table}
+# Bold the best value per metric per scenario
+res_display <- res %>%
+  group_by(scenario) %>%
+  mutate(
+    best_sig  = rmse_signal == min(rmse_signal),
+    best_null = rmse_null   == min(rmse_null),
+    best_sens = sens_fdr10  == max(sens_fdr10)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    rmse_signal_fmt = ifelse(best_sig,
+      paste0("\\textbf{", sprintf("%.3f", rmse_signal), "}"),
+      sprintf("%.3f", rmse_signal)),
+    rmse_null_fmt = ifelse(best_null,
+      paste0("\\textbf{", sprintf("%.3f", rmse_null), "}"),
+      sprintf("%.3f", rmse_null)),
+    sens_fmt = ifelse(best_sens,
+      paste0("\\textbf{", sprintf("%.3f", sens_fdr10), "}"),
+      sprintf("%.3f", sens_fdr10))
+  ) %>%
+  select(scenario, model, sens_fmt, rmse_signal_fmt, rmse_null_fmt)
+
+# Print as LaTeX table
+cat("\\begin{table}[H]\n")
+cat("\\centering\n")
+cat("\\small\n")
+cat("\\begin{tabular}{llccc}\n")
+cat("\\toprule\n")
+cat("Scenario & Model & Sens.\\ at FDR$\\le$10\\% & ",
+    "RMSE$_\\beta^{(\\text{signal})}$ & RMSE$_\\beta^{(\\text{null})}$ \\\\\n")
+cat("\\midrule\n")
+
+prev_sc <- ""
+for (i in seq_len(nrow(res_display))) {
+  row <- res_display[i, ]
+  sc  <- row$scenario
+  n_sc <- sum(res_display$scenario == sc)
+  if (sc != prev_sc) {
+    cat(sprintf("\\multirow{3}{*}{%s}\n", sc))
+    prev_sc <- sc
+  }
+  cat(sprintf(" & %s & %s & %s & %s \\\\\n",
+              row$model, row$sens_fmt,
+              row$rmse_signal_fmt, row$rmse_null_fmt))
+  # Add midrule between scenarios (not after last)
+  next_sc <- if (i < nrow(res_display)) res_display$scenario[i+1] else ""
+  if (sc != next_sc && i < nrow(res_display))
+    cat("\\midrule\n")
+}
+
+cat("\\bottomrule\n")
+cat("\\end{tabular}\n")
+cat("\\caption{Threshold-based pair-level evaluation ($n=", n_reps,
+    "$ replicates, mean values). ",
+    "Sens.\\ at FDR$\\le$10\\% $=$ sensitivity of the largest selected set ",
+    "satisfying FDR $\\le$ 10\\% using posterior sign probability $q_{gd}$; ",
+    "RMSE$_\\beta^{(\\text{signal})}$ $=$ RMSE on the truly associated pairs; ",
+    "RMSE$_\\beta^{(\\text{null})}$ $=$ RMSE on the truly null pairs. ",
+    "Bold $=$ best per metric per scenario.}\n", sep="")
+cat("\\label{tab:rmse-decomp}\n")
+cat("\\end{table}\n")
+```

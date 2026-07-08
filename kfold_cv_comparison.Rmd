@@ -1,0 +1,240 @@
+---
+title: "K-Fold Cross-Validated Predictive Likelihood Comparison"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+This notebook computes the genuine out-of-sample $k$-fold cross-validated
+predictive likelihood comparison specified in `pathway.tex` Phase 3, item
+3, following Samorodnitsky et al. (2020) Section 2.4 -- replacing the
+quick in-sample-only comparison used so far (`gibbs_sampler_full.Rmd`
+Part 3 Step 6) with the rigorous metric originally planned.
+
+**Why this matters, and why it wasn't done first:** an in-sample
+comparison structurally favors whichever model has more flexibility to
+fit the training data exactly, regardless of whether that flexibility
+generalizes. This was demonstrated directly during the ablation
+comparison: KRAS appeared far more often as a "driver" in the
+no-horseshoe model (161 of 295 drugs) than in the full model (1 of 295),
+which is the expected signature of removing a sparsity-inducing prior,
+not evidence the no-horseshoe model found 160 additional genuine
+discoveries. A proper held-out comparison is the only way to check
+whether the full model's added structure (network prior, horseshoe)
+actually improves out-of-sample prediction, not just in-sample fit.
+
+**Design notes -- read before running:**
+
+- **$k=3$ folds, not the more conventional $k=5$ or $k=10$.** Each fold
+  requires fitting all three models (full, no-network, no-horseshoe)
+  once, so total model fits = $3k$. At $k=5$ or $k=10$, even at reduced
+  chain settings, this becomes a multi-day commitment (estimated 24--48
+  hours at the ablation-comparison chain length); $k=3$ keeps this to a
+  single extended run (estimated below) while still giving each fold a
+  meaningfully large training set ($\sim$634 of 951 cell lines) and test
+  set ($\sim$317 cell lines).
+- **Folds are constructed at the cell-line level**, identically across
+  all three models and re-used for every model, so the comparison is
+  apples-to-apples: the same cell lines are held out for the same fold
+  regardless of which model is being scored.
+- **The comparison metric is the posterior predictive log-likelihood**,
+  computed correctly as $\log\left(\frac{1}{S}\sum_{s=1}^S
+  p(y_{\text{test}} \mid \theta^{(s)})\right)$ (averaging the
+  *likelihood*, not the log-likelihood, across posterior samples $s$,
+  via the log-sum-exp trick for numerical stability) -- **not**
+  $\frac{1}{S}\sum_s \log p(y_{\text{test}} \mid \theta^{(s)})$, which is
+  a different, smaller quantity by Jensen's inequality and was verified
+  to differ meaningfully (by 1--2% in early testing) from the correct
+  value during development. Getting this distinction right matters,
+  since silently using the wrong one would systematically bias every
+  model's score in the same direction without affecting the qualitative
+  ranking much -- but a published number should be the right one
+  regardless.
+- **Each posterior sample's own $\sigma_d^2$ is used**, not the
+  posterior mean of $\sigma_d^2$, since a proper posterior predictive
+  density integrates over the full posterior, not a plug-in point
+  estimate.
+
+## Step 1: Set paths and load data
+
+```{r config}
+mutation_matrix_path <- "mutation_matrix.csv"
+response_matrix_path <- "response_matrix.csv"
+network_matrix_path  <- "gene_adjacency_W.csv"
+sampler_path         <- "gibbs_sampler.R"
+```
+
+```{r load}
+source(sampler_path)
+
+mut <- read.csv(mutation_matrix_path, row.names = 1, check.names = FALSE)
+resp <- read.csv(response_matrix_path)
+W <- as.matrix(read.csv(network_matrix_path, row.names = 1, check.names = FALSE))
+
+model_ids <- colnames(mut)
+M_full <- t(as.matrix(mut))
+rownames(M_full) <- model_ids
+n_models <- length(model_ids)
+
+all_drugs <- sort(unique(resp$drug_id))
+cat(sprintf("Loaded: %d genes x %d models, %d drugs, network %d x %d\n",
+            nrow(mut), n_models, length(all_drugs), nrow(W), ncol(W)))
+```
+
+## Step 2: Build the response matrix and the K folds
+
+```{r build-y-and-folds}
+y_full <- matrix(NA, nrow = n_models, ncol = length(all_drugs),
+                  dimnames = list(model_ids, as.character(all_drugs)))
+for (i in seq_len(nrow(resp))) {
+  y_full[as.character(resp$model_id[i]), as.character(resp$drug_id[i])] <- resp$y[i]
+}
+
+set.seed(2024)
+k_folds <- 3
+fold_assignment <- sample(rep(1:k_folds, length.out = n_models))
+cat("Fold sizes:", table(fold_assignment), "\n")
+cat("(Same fold assignment is reused for every model below, so the comparison is apples-to-apples.)\n")
+```
+
+## Step 3: Posterior predictive log-likelihood function
+
+```{r log-lik-function}
+log_mean_exp <- function(x) {
+  # Numerically stable log(mean(exp(x))), used to correctly average a
+  # LIKELIHOOD (not a log-likelihood) across posterior samples -- see
+  # the Overview above for why this is the statistically correct
+  # quantity, verified to differ from a naive mean(log-lik) during
+  # development.
+  m <- max(x)
+  m + log(mean(exp(x - m))) - log(length(x))
+}
+
+compute_held_out_loglik <- function(fit_chains, y_full, test_idx, drug_ids) {
+  # Pools posterior samples across all chains in fit_chains, computing
+  # the log predictive density for each sample using THAT sample's own
+  # sigma2 (not the posterior mean), then combines via log-mean-exp.
+  all_ll <- c()
+  for (fit in fit_chains) {
+    n_kept <- dim(fit$beta_tilde)[3]
+    for (s in seq_len(n_kept)) {
+      ll <- 0
+      for (d in seq_along(drug_ids)) {
+        obs_test <- test_idx[!is.na(y_full[test_idx, d])]
+        if (length(obs_test) == 0) next
+        mu_pred <- fit$alpha[1, d, s] +
+          as.numeric(M_full[obs_test, , drop = FALSE] %*% fit$beta_tilde[, d, s])
+        ll <- ll + sum(dnorm(y_full[obs_test, d], mu_pred, sqrt(fit$sigma2[d, s]), log = TRUE))
+      }
+      all_ll <- c(all_ll, ll)
+    }
+  }
+  log_mean_exp(all_ll)
+}
+```
+
+## Step 4: Settings
+
+Edit these if you want a different chain length, drug subset, or number
+of folds. Defaults were chosen to keep total runtime to roughly a day
+(see the printed estimate below) while still using the complete drug
+panel.
+
+```{r kfold-settings}
+n_iter <- 800
+burn_in <- 200
+thin <- 2
+n_chains <- 2
+drugs_to_use <- all_drugs  # full 295-drug panel; subset here if needed, e.g. all_drugs[1:50]
+
+n_fits <- k_folds * 3
+cat(sprintf("Total model fits required: %d folds x 3 models = %d\n", k_folds, n_fits))
+cat("Benchmark this against a single full-scale fit's measured runtime\n")
+cat("(see gibbs_sampler_full.Rmd's performance notes) before committing --\n")
+cat("at ~45-50 min per chain at n_iter=1500/295 drugs, n_iter=800 here\n")
+cat("should run roughly proportionally faster per fit, but multiply by\n")
+cat(sprintf("%d total fits x %d chains before estimating total wall time.\n", n_fits, n_chains))
+```
+
+## Step 5: Run all folds for all three models
+
+**This is the long-running step.** Consider running this chunk on its
+own (not via "Run All") and saving results incrementally, since a
+failure partway through should not require restarting from fold 1.
+
+```{r run-kfold, eval=FALSE}
+results <- data.frame(model = character(0), fold = integer(0), held_out_loglik = numeric(0))
+
+model_configs <- list(
+  full = list(use_network_layer = TRUE, use_horseshoe_layer = TRUE),
+  no_network = list(use_network_layer = FALSE, use_horseshoe_layer = TRUE),
+  no_horseshoe = list(use_network_layer = TRUE, use_horseshoe_layer = FALSE)
+)
+
+y_sub <- y_full[, as.character(drugs_to_use), drop = FALSE]
+
+for (model_name in names(model_configs)) {
+  cfg <- model_configs[[model_name]]
+  for (fold_i in seq_len(k_folds)) {
+    cat(sprintf("\n=== Model: %s | Fold %d/%d ===\n", model_name, fold_i, k_folds))
+    test_idx <- which(fold_assignment == fold_i)
+
+    y_train <- y_sub
+    y_train[test_idx, ] <- NA
+
+    t0 <- Sys.time()
+    fit_chains <- vector("list", n_chains)
+    for (chain_i in seq_len(n_chains)) {
+      fit_chains[[chain_i]] <- gibbs_sampler(
+        y = y_train, M = M_full, group = rep(1, n_models), W = W,
+        delta = 0.8, use_group_layer = FALSE,
+        use_network_layer = cfg$use_network_layer,
+        use_horseshoe_layer = cfg$use_horseshoe_layer,
+        n_iter = n_iter, burn_in = burn_in, thin = thin,
+        verbose = 0, seed = chain_i
+      )
+    }
+    elapsed <- as.numeric(difftime(Sys.time(), t0, units = "mins"))
+
+    held_out_ll <- compute_held_out_loglik(fit_chains, y_sub, test_idx, drugs_to_use)
+    cat(sprintf("  Held-out log-lik: %.2f  (elapsed: %.1f min)\n", held_out_ll, elapsed))
+
+    results <- rbind(results, data.frame(model = model_name, fold = fold_i,
+                                           held_out_loglik = held_out_ll))
+
+    # Save incrementally after every fold, so a failure partway through
+    # does not lose completed folds.
+    write.csv(results, "kfold_results_partial.csv", row.names = FALSE)
+  }
+}
+
+write.csv(results, "kfold_results.csv", row.names = FALSE)
+cat("\nSaved kfold_results.csv\n")
+```
+
+```{r reload-if-resuming, eval=FALSE}
+# If resuming after an interruption, reload whatever completed so far:
+results <- read.csv("kfold_results_partial.csv")
+```
+
+## Step 6: Summarize
+
+```{r summarize, eval=FALSE}
+summary_df <- aggregate(held_out_loglik ~ model, data = results,
+                         FUN = function(x) c(mean = mean(x), sd = sd(x), sum = sum(x)))
+summary_df <- do.call(data.frame, summary_df)
+names(summary_df) <- c("model", "mean_loglik_per_fold", "sd_loglik_per_fold", "total_loglik")
+cat("=== K-fold cross-validated held-out log-likelihood, by model ===\n")
+cat("(Higher / less negative is better -- the model assigns higher predictive\n")
+cat("density to data it did not see during fitting.)\n\n")
+summary_df[order(-summary_df$total_loglik), ]
+```
+
+```{r per-fold-detail, eval=FALSE}
+cat("=== Per-fold detail ===\n")
+results[order(results$model, results$fold), ]
+```

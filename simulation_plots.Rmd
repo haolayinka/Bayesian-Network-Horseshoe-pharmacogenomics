@@ -1,0 +1,183 @@
+---
+title: "Simulation Study and Real-Data Figures"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      fig.width = 8, fig.height = 5, dpi = 600)
+library(ggplot2); library(dplyr); library(tidyr)
+
+col_full <- "#0072B2"; col_nn <- "#E69F00"; col_nh <- "#CC79A7"
+pal <- c(full=col_full, no_network=col_nn, no_horseshoe=col_nh)
+lab <- c(full="Full model", no_network="No-network", no_horseshoe="No-horseshoe")
+theme_paper <- theme_bw(base_size=11) +
+  theme(legend.position="bottom", panel.grid.minor=element_blank(),
+        strip.background=element_rect(fill="grey92"))
+```
+
+```{r load-data}
+# ADJUST THESE PATHS to match your local directory structure
+sim_dir   <- "~/sim_results/Simulation_results"
+thresh_csv <- "~/sim_results/threshold_analysis_results.csv"
+real_pairs_csv <- "path/to/included_gene_drug_pairs.csv"
+delta_dir  <- "path/to/delta_results"
+
+s1 <- read.csv(file.path(sim_dir,"metrics_scenario_1_sparse_independent_partial.csv"))
+s2 <- read.csv(file.path(sim_dir,"metrics_scenario_2_network_structured_partial.csv"))
+s3 <- read.csv(file.path(sim_dir,"metrics_scenario_3_dense_weak_noise_partial.csv"))
+thresh <- read.csv(thresh_csv)
+
+sc_labs <- c(sc1="Sc.1: Sparse\nIndependent",
+             sc2="Sc.2: Network\nStructured",
+             sc3="Sc.3: Dense\nWeak Noise")
+thresh <- thresh %>%
+  mutate(sc_label=sc_labs[scenario],
+         model_lab=factor(lab[model], levels=lab))
+
+all_metrics <- bind_rows(
+  s1 %>% filter(replicate<=100) %>% mutate(sc_label="Sc.1: Sparse\nIndependent"),
+  s2 %>% filter(replicate<=100) %>% mutate(sc_label="Sc.2: Network\nStructured"),
+  s3 %>% filter(replicate<=100) %>% mutate(sc_label="Sc.3: Dense\nWeak Noise")
+) %>% mutate(model_lab=factor(lab[model], levels=lab))
+```
+
+## Figure 1: Simulation metrics — box plots across scenarios
+
+```{r fig1, fig.height=6.5, fig.cap="Simulation study results across three scenarios (n=50 replicates each). The full model achieves superior precision and FDR control in all scenarios, at the cost of lower sensitivity — the expected tradeoff for a horseshoe-shrinkage model."}
+box_data <- all_metrics %>%
+  select(sc_label, model_lab, sensitivity, precision, fdr) %>%
+  pivot_longer(c(sensitivity,precision,fdr), names_to="metric", values_to="value") %>%
+  mutate(metric=recode(metric, sensitivity="Sensitivity",
+                       precision="Precision", fdr="FDR (lower=better)"))
+
+ggplot(box_data, aes(x=model_lab, y=value, fill=model_lab)) +
+  geom_boxplot(width=0.55, outlier.size=0.7, alpha=0.85) +
+  facet_grid(metric~sc_label, scales="free_y") +
+  scale_fill_manual(values=pal, labels=lab, name=NULL) +
+  labs(x=NULL, y=NULL) +
+  theme_paper +
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+```
+
+## Figure 2: RMSE decomposed by association status
+
+```{r fig2, fig.height=4.5, fig.cap="RMSE decomposed into true-nonzero (3.3\\% of pairs) and true-zero (96.7\\%) subsets. The full model's horseshoe prior achieves the lowest RMSE on true-zero pairs, confirming correct null shrinkage, while the no-network model achieves lower RMSE on true-nonzero pairs due to less shrinkage bias on signal coefficients. Neither model dominates on all subsets simultaneously."}
+rmse_d <- thresh %>%
+  select(sc_label, model_lab, rmse_signal, rmse_null) %>%
+  pivot_longer(c(rmse_signal,rmse_null), names_to="subset", values_to="rmse") %>%
+  mutate(subset=recode(subset,
+    rmse_signal="True nonzero pairs\n(3.3% of all pairs)",
+    rmse_null  ="True zero pairs\n(96.7% of all pairs)"))
+
+ggplot(rmse_d, aes(x=model_lab, y=rmse, fill=model_lab)) +
+  geom_col(width=0.6, alpha=0.85) +
+  facet_grid(subset~sc_label, scales="free_y") +
+  scale_fill_manual(values=pal, labels=lab, name=NULL) +
+  labs(x=NULL, y="RMSE") +
+  theme_paper +
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+```
+
+## Figure 3: AUC-PR and sensitivity at matched FDR
+
+```{r fig3, fig.height=4.5, fig.cap="Precision-recall AUC and sensitivity at a matched FDR of 10\\%. The no-network model achieves higher AUC-PR because it ranks more true associations highly, but at the cost of substantially lower precision at any fixed threshold (Figure 1). When FDR is controlled at 10\\%, the full model recovers a comparable number of true associations with far fewer false discoveries."}
+auc_d <- thresh %>%
+  select(sc_label, model_lab, auc_pr, sens_at_fdr10) %>%
+  pivot_longer(c(auc_pr,sens_at_fdr10), names_to="metric", values_to="value") %>%
+  mutate(metric=recode(metric,
+    auc_pr="AUC-PR",
+    sens_at_fdr10="Sensitivity at\nFDR \u2264 10%"))
+
+ggplot(auc_d, aes(x=model_lab, y=value, fill=model_lab)) +
+  geom_col(width=0.6, alpha=0.85) +
+  facet_grid(metric~sc_label) +
+  scale_fill_manual(values=pal, labels=lab, name=NULL) +
+  scale_y_continuous(limits=c(0,1)) +
+  labs(x=NULL, y=NULL) +
+  theme_paper +
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())
+```
+
+## Figure 4: Metric convergence across replicates (full model)
+
+```{r fig4, fig.height=3.5, fig.cap="Cumulative mean of key metrics for the full model as replicates accumulate. All metrics stabilize by n=10 and are essentially unchanged from n=20 to n=50, confirming sufficient Monte Carlo stability."}
+conv <- bind_rows(
+  s1 %>% mutate(sc_label="Sc.1: Sparse Indep."),
+  s2 %>% mutate(sc_label="Sc.2: Network Struct."),
+  s3 %>% mutate(sc_label="Sc.3: Dense Weak Noise")
+) %>%
+  filter(model=="full", replicate<=100) %>%
+  arrange(sc_label, replicate) %>%
+  group_by(sc_label) %>%
+  mutate(cum_prec=cummean(precision), cum_fdr=cummean(fdr),
+         cum_cov=cummean(coverage_95)) %>%
+  select(sc_label, replicate, cum_prec, cum_fdr, cum_cov) %>%
+  pivot_longer(starts_with("cum_"), names_to="metric", values_to="value") %>%
+  mutate(metric=recode(metric, cum_prec="Precision",
+                       cum_fdr="FDR", cum_cov="Coverage"))
+
+ggplot(conv, aes(x=replicate, y=value, colour=sc_label)) +
+  geom_line(linewidth=0.9) +
+  facet_wrap(~metric, scales="free_y", nrow=1) +
+  scale_colour_manual(values=c("#0072B2","#E69F00","#009E73"), name=NULL) +
+  labs(x="Number of replicates", y="Cumulative mean") +
+  theme_paper
+```
+
+## Figure 5: Posterior effect distributions for top driver genes (real GDSC2 data)
+
+```{r fig5, fig.height=4, fig.cap="Posterior mean effect sizes for the six most-associated genes in the GDSC2 analysis. Each point represents one associated drug (95\\% CI excludes zero). EZH2 and KMT2D show uniformly negative effects (mutation associated with greater sensitivity). TP53's single association (Nutlin-3a) is positive (resistance), consistent with Nutlin-3a's mechanism requiring functional p53."}
+real_pairs <- read.csv(real_pairs_csv)
+plot_genes <- c("EZH2","KMT2D","ASXL1","TET2","PBRM1","TP53")
+plot_d <- real_pairs %>%
+  filter(gene %in% plot_genes) %>%
+  mutate(gene=factor(gene, levels=rev(plot_genes)))
+
+ggplot(plot_d, aes(x=post_mean, y=gene, colour=gene)) +
+  geom_point(alpha=0.55, size=2,
+             position=position_jitter(height=0.18, seed=42)) +
+  geom_segment(data=real_pairs %>%
+    filter(gene %in% plot_genes) %>%
+    group_by(gene) %>%
+    summarise(pm=mean(post_mean), .groups="drop") %>%
+    mutate(gene=factor(gene, levels=rev(plot_genes))),
+    aes(x=pm, xend=pm, y=as.numeric(gene)-0.35, yend=as.numeric(gene)+0.35),
+    colour="black", linewidth=0.8) +
+  geom_vline(xintercept=0, linetype="dashed", colour="grey40") +
+  scale_colour_brewer(palette="Dark2", guide="none") +
+  labs(x="Posterior mean effect (ln-IC50 units)", y=NULL,
+       subtitle="Tick = mean across associated drugs. Negative = greater sensitivity in mutant lines.") +
+  theme_paper
+```
+
+## Figure 6: Delta sensitivity — EZH2 and KMT2D are stable across delta values
+
+```{r fig6, fig.height=3.5, fig.cap="Mean posterior effect size (averaged across associated drugs, $\\pm$1 SD) for EZH2 and KMT2D across all four values of the network-smoothing parameter $\\delta$. Point size is proportional to number of associated drugs. Both genes show negligible variation in effect magnitude, and KMT2D's associated drug set is identical at all four values."}
+delta_files <- list(
+  "0.5" = file.path(delta_dir, "included_gene_drug_pairs0.5.csv"),
+  "0.7" = file.path(delta_dir, "included_gene_drug_pairs0.7.csv"),
+  "0.8" = real_pairs_csv,
+  "0.9" = file.path(delta_dir, "included_gene_drug_pairs9.csv")
+)
+
+delta_data <- lapply(names(delta_files), function(d) {
+  df <- read.csv(delta_files[[d]]); df$delta <- as.numeric(d); df
+}) %>% bind_rows()
+
+delta_sum <- delta_data %>%
+  filter(gene %in% c("EZH2","KMT2D")) %>%
+  group_by(delta, gene) %>%
+  summarise(n_drugs=n(), mean_eff=mean(post_mean),
+            sd_eff=sd(post_mean), .groups="drop")
+
+ggplot(delta_sum, aes(x=delta, y=mean_eff, colour=gene, group=gene)) +
+  geom_line(linewidth=1.1) +
+  geom_point(aes(size=n_drugs)) +
+  geom_errorbar(aes(ymin=mean_eff-sd_eff, ymax=mean_eff+sd_eff), width=0.015) +
+  scale_colour_manual(values=c(EZH2=col_full, KMT2D=col_nn), name=NULL) +
+  scale_size_continuous(range=c(3,6), name="Associated\ndrugs") +
+  labs(x=expression(delta~"(network smoothing parameter)"),
+       y="Mean posterior effect (ln-IC50 units)") +
+  theme_paper
+```

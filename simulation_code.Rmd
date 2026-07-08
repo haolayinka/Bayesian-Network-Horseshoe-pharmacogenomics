@@ -1,0 +1,778 @@
+---
+title: "Simulation Study Runner: Revised Network-Structured Scenario 2"
+output: html_document
+---
+
+# Purpose
+
+This R Markdown file contains the simulation-generation and simulation-fitting framework for the no-group-layer simulation study. The main correction is in **Scenario 2**, which is revised to be a cleaner network-prior-favored scenario. Instead of activating only a very small number of connected genes, Scenario 2 now generates a larger network-connected module per drug, with smooth pathway-level effects over the selected module.
+
+The intended workflow is:
+
+1. Generate simulation files for one scenario at a time.
+2. Run the Gibbs sampler for one scenario at a time.
+3. Save standard metrics and pair-level score files.
+4. Use the pair-level files later for sensitivity at matched FDR, matched number selected, and precision--recall analyses if desired.
+
+```{r setup, message=FALSE, warning=FALSE}
+suppressWarnings(suppressMessages({
+  library(coda)
+}))
+```
+
+# 1. Required Sampler
+
+Paste your already-tested `gibbs_sampler()` function above this section, or save it as `gibbs_sampler.R` and uncomment the line below.
+
+```{r sampler-source, eval=FALSE}
+source("gibbs_sampler.R")
+```
+
+```{r rinvgamma}
+rinvgamma <- function(n, shape, rate) {
+  1 / rgamma(n, shape = shape, rate = rate)
+}
+```
+
+# 2. Simulation Settings
+
+```{r simulation-settings}
+
+# Reduced-but-structured simulation dimensions
+N <- 400
+G <- 150
+D <- 50
+G_net <- 100
+K <- 10
+n_reps <- 100
+
+delta <- 0.8
+sigma_y <- 1.0
+alpha_sd <- 0.5
+
+p_min <- 0.01
+p_max <- 0.25
+
+# Scenario 1 and Scenario 3 sparse signal settings
+n_signal_per_drug <- 5
+n_weak_per_drug <- 25
+
+strong_mean <- 1.0
+strong_sd <- 0.25
+weak_sd <- 0.10
+
+# Revised Scenario 2 setting:
+# Use a larger connected pathway module so the network prior has a fair chance to help.
+n_network_signal_per_drug <- 20
+network_effect_size <- 0.60
+network_effect_sd <- 0.15
+
+# MCMC settings
+mcmc_n_iter <- 4000
+mcmc_burn_in <- 1000
+mcmc_thin <- 3
+mcmc_n_chains <- 2
+
+samples_per_chain <- (mcmc_n_iter - mcmc_burn_in) / mcmc_thin
+cat("Samples kept per chain:", samples_per_chain, "\n")
+cat("Total chains:", mcmc_n_chains, "\n")
+```
+
+# 3. Simulation Helper Functions
+
+```{r simulation-helper-functions}
+make_mock_network <- function(G_net, n_modules = 8, edge_prob_within = 0.20) {
+  W <- matrix(0, G_net, G_net)
+  modules <- split(seq_len(G_net), cut(seq_len(G_net), n_modules, labels = FALSE))
+
+  for (mod in modules) {
+    if (length(mod) > 1) {
+      for (i in mod) {
+        for (j in mod) {
+          if (i < j && runif(1) < edge_prob_within) {
+            W[i, j] <- 1
+            W[j, i] <- 1
+          }
+        }
+      }
+    }
+  }
+
+  deg <- rowSums(W)
+  isolated <- which(deg == 0)
+  for (g in isolated) {
+    h <- sample(setdiff(seq_len(G_net), g), 1)
+    W[g, h] <- 1
+    W[h, g] <- 1
+  }
+
+  diag(W) <- 0
+  W
+}
+
+make_precision <- function(W, delta = 0.8, ridge = 1e-6) {
+  D_W <- diag(rowSums(W))
+  Q <- D_W - delta * W
+  Q <- Q + diag(ridge, nrow(Q))
+  Q
+}
+
+rmvnorm_chol <- function(mu, Sigma) {
+  R <- chol(Sigma)
+  as.numeric(mu + t(R) %*% rnorm(length(mu)))
+}
+
+simulate_mutations <- function(N, G, p_min = 0.01, p_max = 0.25, p_emp = NULL) {
+  if (is.null(p_emp)) {
+    p_g <- runif(G, p_min, p_max)
+  } else {
+    p_g <- p_emp
+  }
+
+  M <- matrix(0, N, G)
+  for (g in seq_len(G)) {
+    M[, g] <- rbinom(N, size = 1, prob = p_g[g])
+  }
+
+  colnames(M) <- paste0("Gene", seq_len(G))
+  rownames(M) <- paste0("CL", seq_len(N))
+
+  list(M = M, p_g = p_g)
+}
+
+simulate_groups <- function(N, K) {
+  sample(seq_len(K), size = N, replace = TRUE)
+}
+
+simulate_response_nogroup <- function(M_full, beta_true, alpha, sigma_y = 1.0) {
+  N <- nrow(M_full)
+  D <- ncol(beta_true)
+  y_full <- matrix(NA, N, D)
+
+  for (d in seq_len(D)) {
+    mu <- alpha[d] + M_full %*% beta_true[, d]
+    y_full[, d] <- as.numeric(mu + rnorm(N, 0, sigma_y))
+  }
+
+  rownames(y_full) <- rownames(M_full)
+  colnames(y_full) <- paste0("Drug", seq_len(D))
+  y_full
+}
+
+simulate_response_group <- function(M_full, beta_group, alpha_group, group, sigma_y = 1.0) {
+  N <- nrow(M_full)
+  D <- dim(beta_group)[2]
+  y_full <- matrix(NA, N, D)
+
+  for (i in seq_len(N)) {
+    k <- group[i]
+    for (d in seq_len(D)) {
+      mu_id <- alpha_group[k, d] + sum(M_full[i, ] * beta_group[, d, k])
+      y_full[i, d] <- mu_id + rnorm(1, 0, sigma_y)
+    }
+  }
+
+  rownames(y_full) <- rownames(M_full)
+  colnames(y_full) <- paste0("Drug", seq_len(D))
+  y_full
+}
+
+select_network_module <- function(W, n_genes) {
+  G_net_local <- nrow(W)
+  seed_gene <- sample(seq_len(G_net_local), 1)
+  selected <- seed_gene
+
+  while (length(selected) < n_genes) {
+    neighbors <- which(rowSums(W[selected, , drop = FALSE]) > 0)
+    candidates <- setdiff(neighbors, selected)
+
+    if (length(candidates) == 0) {
+      candidates <- setdiff(seq_len(G_net_local), selected)
+    }
+
+    selected <- c(selected, sample(candidates, 1))
+  }
+
+  selected
+}
+
+W <- make_mock_network(G_net = G_net)
+network_gene_idx <- seq_len(G_net)
+nonnetwork_gene_idx <- setdiff(seq_len(G), network_gene_idx)
+```
+
+# 4. Simulation Scenarios
+
+## Scenario 1: Sparse Independent Effects
+
+```{r scenario-1}
+simulate_scenario_1 <- function(rep_id) {
+  mut <- simulate_mutations(N, G, p_min, p_max)
+  M_full <- mut$M
+
+  beta_true <- matrix(0, G, D)
+  true_assoc <- matrix(FALSE, G, D)
+
+  for (d in seq_len(D)) {
+    active_genes <- sample(seq_len(G), n_signal_per_drug)
+    beta_true[active_genes, d] <- rnorm(n_signal_per_drug, strong_mean, strong_sd) *
+      sample(c(-1, 1), n_signal_per_drug, replace = TRUE)
+    true_assoc[active_genes, d] <- TRUE
+  }
+
+  alpha <- rnorm(D, 0, alpha_sd)
+  y_full <- simulate_response_nogroup(M_full, beta_true, alpha, sigma_y)
+
+  W_named <- W
+  rownames(W_named) <- colnames(M_full)[seq_len(nrow(W_named))]
+  colnames(W_named) <- colnames(M_full)[seq_len(ncol(W_named))]
+
+  list(
+    scenario = "scenario_1_sparse_independent",
+    y_full = y_full,
+    M_full = M_full,
+    W = W_named,
+    group = rep(1, N),
+    drugs_to_use = colnames(y_full),
+    beta_true = beta_true,
+    true_assoc = true_assoc,
+    alpha_true = alpha,
+    sigma_y = sigma_y,
+    network_gene_idx = network_gene_idx,
+    nonnetwork_gene_idx = nonnetwork_gene_idx,
+    delta = delta
+  )
+}
+```
+
+## Scenario 2: Revised Network-Structured Effects
+
+This is the revised clean network-prior-favored scenario. Each drug has a larger connected network module of active genes. Effects are moderate and network-correlated. This is intended to make the data-generating mechanism more aligned with the network prior.
+
+```{r scenario-2-revised}
+simulate_scenario_2 <- function(rep_id,
+                                effect_size = network_effect_size,
+                                effect_sd = network_effect_sd,
+                                n_module_genes = n_network_signal_per_drug) {
+  mut <- simulate_mutations(N, G, p_min, p_max)
+  M_full <- mut$M
+
+  beta_true <- matrix(0, G, D)
+  true_assoc <- matrix(FALSE, G, D)
+
+  Q <- make_precision(W, delta = delta)
+  Sigma_net <- solve(Q)
+
+  for (d in seq_len(D)) {
+    active_net_positions <- select_network_module(W, n_module_genes)
+    active_genes <- network_gene_idx[active_net_positions]
+
+    sign_d <- sample(c(-1, 1), 1)
+
+    network_noise <- rmvnorm_chol(
+      mu = rep(0, G_net),
+      Sigma = effect_sd^2 * Sigma_net
+    )
+
+    beta_true[active_genes, d] <- sign_d * effect_size +
+      network_noise[active_net_positions]
+
+    true_assoc[active_genes, d] <- TRUE
+  }
+
+  alpha <- rnorm(D, 0, alpha_sd)
+  y_full <- simulate_response_nogroup(M_full, beta_true, alpha, sigma_y)
+
+  W_named <- W
+  rownames(W_named) <- colnames(M_full)[seq_len(nrow(W_named))]
+  colnames(W_named) <- colnames(M_full)[seq_len(ncol(W_named))]
+
+  list(
+    scenario = "scenario_2_network_structured",
+    description = "Revised network-smooth module-level effects designed to favor the network prior.",
+    y_full = y_full,
+    M_full = M_full,
+    W = W_named,
+    group = rep(1, N),
+    drugs_to_use = colnames(y_full),
+    beta_true = beta_true,
+    true_assoc = true_assoc,
+    alpha_true = alpha,
+    sigma_y = sigma_y,
+    network_gene_idx = network_gene_idx,
+    nonnetwork_gene_idx = nonnetwork_gene_idx,
+    delta = delta,
+    effect_size = effect_size,
+    effect_sd = effect_sd,
+    n_module_genes = n_module_genes
+  )
+}
+```
+
+## Scenario 3: Dense Weak Noise With Sparse Strong Signals
+
+```{r scenario-3}
+simulate_scenario_3 <- function(rep_id) {
+  mut <- simulate_mutations(N, G, p_min, p_max)
+  M_full <- mut$M
+
+  beta_true <- matrix(0, G, D)
+  true_assoc <- matrix(FALSE, G, D)
+  weak_assoc <- matrix(FALSE, G, D)
+
+  for (d in seq_len(D)) {
+    strong_genes <- sample(seq_len(G), n_signal_per_drug)
+    weak_genes <- sample(setdiff(seq_len(G), strong_genes), n_weak_per_drug)
+
+    beta_true[strong_genes, d] <- rnorm(n_signal_per_drug, strong_mean, strong_sd) *
+      sample(c(-1, 1), n_signal_per_drug, replace = TRUE)
+    beta_true[weak_genes, d] <- rnorm(n_weak_per_drug, 0, weak_sd)
+
+    true_assoc[strong_genes, d] <- TRUE
+    weak_assoc[weak_genes, d] <- TRUE
+  }
+
+  alpha <- rnorm(D, 0, alpha_sd)
+  y_full <- simulate_response_nogroup(M_full, beta_true, alpha, sigma_y)
+
+  W_named <- W
+  rownames(W_named) <- colnames(M_full)[seq_len(nrow(W_named))]
+  colnames(W_named) <- colnames(M_full)[seq_len(ncol(W_named))]
+
+  list(
+    scenario = "scenario_3_dense_weak_noise",
+    y_full = y_full,
+    M_full = M_full,
+    W = W_named,
+    group = rep(1, N),
+    drugs_to_use = colnames(y_full),
+    beta_true = beta_true,
+    true_assoc = true_assoc,
+    weak_assoc = weak_assoc,
+    alpha_true = alpha,
+    sigma_y = sigma_y,
+    network_gene_idx = network_gene_idx,
+    nonnetwork_gene_idx = nonnetwork_gene_idx,
+    delta = delta
+  )
+}
+```
+
+## Scenario 4: Group-Specific Effects
+
+```{r scenario-4}
+simulate_scenario_4 <- function(rep_id, eta_sd = 0.25) {
+  mut <- simulate_mutations(N, G, p_min, p_max)
+  M_full <- mut$M
+  group <- simulate_groups(N, K)
+
+  beta_mean <- matrix(0, G, D)
+  true_assoc <- matrix(FALSE, G, D)
+
+  for (d in seq_len(D)) {
+    active_genes <- sample(seq_len(G), n_signal_per_drug)
+    beta_mean[active_genes, d] <- rnorm(n_signal_per_drug, strong_mean, strong_sd) *
+      sample(c(-1, 1), n_signal_per_drug, replace = TRUE)
+    true_assoc[active_genes, d] <- TRUE
+  }
+
+  beta_group <- array(0, dim = c(G, D, K))
+  for (k in seq_len(K)) {
+    beta_group[, , k] <- beta_mean + matrix(rnorm(G * D, 0, eta_sd), G, D) * true_assoc
+  }
+
+  alpha_group <- matrix(rnorm(K * D, 0, alpha_sd), K, D)
+  y_full <- simulate_response_group(M_full, beta_group, alpha_group, group, sigma_y)
+
+  W_named <- W
+  rownames(W_named) <- colnames(M_full)[seq_len(nrow(W_named))]
+  colnames(W_named) <- colnames(M_full)[seq_len(ncol(W_named))]
+
+  list(
+    scenario = "scenario_4_group_specific",
+    y_full = y_full,
+    M_full = M_full,
+    W = W_named,
+    group = group,
+    drugs_to_use = colnames(y_full),
+    beta_true = beta_mean,
+    beta_group_true = beta_group,
+    true_assoc = true_assoc,
+    alpha_group_true = alpha_group,
+    sigma_y = sigma_y,
+    eta_sd = eta_sd,
+    network_gene_idx = network_gene_idx,
+    nonnetwork_gene_idx = nonnetwork_gene_idx,
+    delta = delta
+  )
+}
+```
+
+## Scenario 5: Network and Group Heterogeneity
+
+```{r scenario-5}
+simulate_scenario_5 <- function(rep_id,
+                                effect_size = network_effect_size,
+                                effect_sd = network_effect_sd,
+                                eta_sd = 0.25,
+                                n_module_genes = n_network_signal_per_drug) {
+  mut <- simulate_mutations(N, G, p_min, p_max)
+  M_full <- mut$M
+  group <- simulate_groups(N, K)
+
+  beta_mean <- matrix(0, G, D)
+  true_assoc <- matrix(FALSE, G, D)
+
+  Q <- make_precision(W, delta = delta)
+  Sigma_net <- solve(Q)
+
+  for (d in seq_len(D)) {
+    active_net_positions <- select_network_module(W, n_module_genes)
+    active_genes <- network_gene_idx[active_net_positions]
+
+    sign_d <- sample(c(-1, 1), 1)
+    network_noise <- rmvnorm_chol(rep(0, G_net), effect_sd^2 * Sigma_net)
+
+    beta_mean[active_genes, d] <- sign_d * effect_size +
+      network_noise[active_net_positions]
+    true_assoc[active_genes, d] <- TRUE
+  }
+
+  beta_group <- array(0, dim = c(G, D, K))
+  for (k in seq_len(K)) {
+    beta_group[, , k] <- beta_mean + matrix(rnorm(G * D, 0, eta_sd), G, D) * true_assoc
+  }
+
+  alpha_group <- matrix(rnorm(K * D, 0, alpha_sd), K, D)
+  y_full <- simulate_response_group(M_full, beta_group, alpha_group, group, sigma_y)
+
+  W_named <- W
+  rownames(W_named) <- colnames(M_full)[seq_len(nrow(W_named))]
+  colnames(W_named) <- colnames(M_full)[seq_len(ncol(W_named))]
+
+  list(
+    scenario = "scenario_5_network_group",
+    y_full = y_full,
+    M_full = M_full,
+    W = W_named,
+    group = group,
+    drugs_to_use = colnames(y_full),
+    beta_true = beta_mean,
+    beta_group_true = beta_group,
+    true_assoc = true_assoc,
+    alpha_group_true = alpha_group,
+    sigma_y = sigma_y,
+    eta_sd = eta_sd,
+    effect_size = effect_size,
+    effect_sd = effect_sd,
+    n_module_genes = n_module_genes,
+    network_gene_idx = network_gene_idx,
+    nonnetwork_gene_idx = nonnetwork_gene_idx,
+    delta = delta
+  )
+}
+```
+
+# 5. Scenario Generator List
+
+```{r scenario-generators}
+scenario_generators <- list(
+  scenario_1_sparse_independent = simulate_scenario_1,
+  scenario_2_network_structured = simulate_scenario_2,
+  scenario_3_dense_weak_noise = simulate_scenario_3,
+  scenario_4_group_specific = simulate_scenario_4,
+  scenario_5_network_group = simulate_scenario_5
+)
+```
+
+# 6. Generate Simulation Files
+
+```{r generate-one-scenario-function}
+generate_one_scenario_files <- function(scenario_name,
+                                        out_dir = ".",
+                                        n_reps = 100,
+                                        overwrite = FALSE) {
+  if (!scenario_name %in% names(scenario_generators)) {
+    stop("Unknown scenario_name: ", scenario_name)
+  }
+
+  scenario_dir <- file.path(out_dir, scenario_name)
+  dir.create(scenario_dir, showWarnings = FALSE, recursive = TRUE)
+
+  gen_fun <- scenario_generators[[scenario_name]]
+
+  for (rep_id in seq_len(n_reps)) {
+    sim_file <- file.path(
+      scenario_dir,
+      paste0("sim_", scenario_name, "_rep", sprintf("%03d", rep_id), ".rds")
+    )
+
+    if (file.exists(sim_file) && !overwrite) {
+      cat("Skipping existing:", sim_file, "\n")
+      next
+    }
+
+    sim <- gen_fun(rep_id)
+    saveRDS(sim, sim_file)
+    cat("Saved:", sim_file, "\n")
+  }
+
+  invisible(TRUE)
+}
+```
+
+Generate one scenario at a time. For the revised Scenario 2, use `overwrite = TRUE` only when you intentionally want to replace the old Scenario 2 files.
+
+```{r generate-scenario-example, eval=FALSE}
+generate_one_scenario_files(
+  scenario_name = "scenario_2_network_structured",
+  out_dir = ".",
+  n_reps = 100,
+  overwrite = TRUE
+)
+```
+
+# 7. Model Configurations and Metric Functions
+
+```{r model-configs-and-score-functions}
+model_configs_nogroup <- list(
+  full = list(use_group_layer = FALSE, use_network_layer = TRUE, use_horseshoe_layer = TRUE),
+  no_network = list(use_group_layer = FALSE, use_network_layer = FALSE, use_horseshoe_layer = TRUE),
+  no_horseshoe = list(use_group_layer = FALSE, use_network_layer = TRUE, use_horseshoe_layer = FALSE)
+)
+
+model_configs_group <- list(
+  full_group = list(use_group_layer = TRUE, use_network_layer = TRUE, use_horseshoe_layer = TRUE),
+  no_network_group = list(use_group_layer = TRUE, use_network_layer = FALSE, use_horseshoe_layer = TRUE),
+  no_horseshoe_group = list(use_group_layer = TRUE, use_network_layer = TRUE, use_horseshoe_layer = FALSE),
+  full_no_group = list(use_group_layer = FALSE, use_network_layer = TRUE, use_horseshoe_layer = TRUE)
+)
+
+combine_beta_draws_base <- function(fit_chains) {
+  beta_list <- lapply(fit_chains, function(fit) fit$beta_tilde)
+  dims <- lapply(beta_list, dim)
+  G_local <- dims[[1]][1]
+  D_local <- dims[[1]][2]
+  total_samples <- sum(sapply(dims, function(x) x[3]))
+
+  beta_combined <- array(NA, dim = c(G_local, D_local, total_samples))
+  start_idx <- 1
+  for (i in seq_along(beta_list)) {
+    n_i <- dim(beta_list[[i]])[3]
+    end_idx <- start_idx + n_i - 1
+    beta_combined[, , start_idx:end_idx] <- beta_list[[i]]
+    start_idx <- end_idx + 1
+  }
+  beta_combined
+}
+
+make_pair_scores <- function(fit_chains, beta_true, true_assoc,
+                             scenario, replicate, replicate_file, model) {
+  beta_draws <- combine_beta_draws_base(fit_chains)
+
+  beta_hat <- apply(beta_draws, c(1, 2), mean)
+  ci_low <- apply(beta_draws, c(1, 2), quantile, probs = 0.025, na.rm = TRUE)
+  ci_high <- apply(beta_draws, c(1, 2), quantile, probs = 0.975, na.rm = TRUE)
+
+  p_pos <- apply(beta_draws, c(1, 2), function(x) mean(x > 0, na.rm = TRUE))
+  p_neg <- apply(beta_draws, c(1, 2), function(x) mean(x < 0, na.rm = TRUE))
+  sign_prob <- pmax(p_pos, p_neg)
+
+  selected_ci <- (ci_low > 0) | (ci_high < 0)
+
+  data.frame(
+    scenario = scenario,
+    replicate = replicate,
+    replicate_file = replicate_file,
+    model = model,
+    gene_index = rep(seq_len(nrow(beta_hat)), times = ncol(beta_hat)),
+    drug_index = rep(seq_len(ncol(beta_hat)), each = nrow(beta_hat)),
+    beta_hat = as.vector(beta_hat),
+    abs_beta_hat = abs(as.vector(beta_hat)),
+    sign_prob = as.vector(sign_prob),
+    ci_low = as.vector(ci_low),
+    ci_high = as.vector(ci_high),
+    selected_ci = as.vector(selected_ci),
+    beta_true = as.vector(beta_true),
+    true_assoc = as.vector(true_assoc)
+  )
+}
+
+evaluate_metrics_from_pair_scores <- function(pair_scores) {
+  selected <- as.logical(pair_scores$selected_ci)
+  true_assoc <- as.logical(pair_scores$true_assoc)
+
+  TP <- sum(selected & true_assoc, na.rm = TRUE)
+  FP <- sum(selected & !true_assoc, na.rm = TRUE)
+  FN <- sum(!selected & true_assoc, na.rm = TRUE)
+  TN <- sum(!selected & !true_assoc, na.rm = TRUE)
+
+  data.frame(
+    rmse_beta = sqrt(mean((pair_scores$beta_hat - pair_scores$beta_true)^2, na.rm = TRUE)),
+    sensitivity = ifelse((TP + FN) > 0, TP / (TP + FN), NA),
+    specificity = ifelse((TN + FP) > 0, TN / (TN + FP), NA),
+    precision = ifelse((TP + FP) > 0, TP / (TP + FP), NA),
+    fdr = ifelse((TP + FP) > 0, FP / (TP + FP), NA),
+    coverage_95 = mean(pair_scores$beta_true >= pair_scores$ci_low &
+                         pair_scores$beta_true <= pair_scores$ci_high, na.rm = TRUE),
+    n_selected = sum(selected, na.rm = TRUE),
+    true_nonzero = sum(true_assoc, na.rm = TRUE),
+    TP = TP,
+    FP = FP,
+    FN = FN,
+    TN = TN
+  )
+}
+```
+
+# 8. Run One Scenario Simulation
+
+```{r run-one-scenario-simulation-fixed}
+run_one_scenario_simulation <- function(scenario_name,
+                                        base_dir = ".",
+                                        results_dir = "simulation_results",
+                                        model_configs = model_configs_nogroup,
+                                        max_reps = 100,
+                                        save_fits = FALSE,
+                                        save_pair_scores = TRUE) {
+  dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
+
+  scenario_dir <- file.path(base_dir, scenario_name)
+  if (!dir.exists(scenario_dir)) stop("Scenario directory does not exist: ", scenario_dir)
+
+  sim_files <- sort(list.files(scenario_dir, pattern = "\\.rds$", full.names = TRUE))
+  sim_files <- sim_files[seq_len(min(max_reps, length(sim_files)))]
+
+  partial_file <- file.path(results_dir, paste0("metrics_", scenario_name, "_partial.csv"))
+  final_file <- file.path(results_dir, paste0("metrics_", scenario_name, "_final.csv"))
+
+  if (file.exists(partial_file)) {
+    results <- read.csv(partial_file)
+  } else {
+    results <- data.frame()
+  }
+
+  for (rep_i in seq_along(sim_files)) {
+    sim_file <- sim_files[rep_i]
+    sim <- readRDS(sim_file)
+
+    rep_id_text <- tools::file_path_sans_ext(basename(sim_file))
+    rep_num <- as.integer(sub(".*_rep([0-9]+)$", "\\1", rep_id_text))
+
+    y_real <- sim$y_full
+    M_real <- sim$M_full
+    W_real <- sim$W
+
+    rownames(W_real) <- colnames(M_real)[seq_len(nrow(W_real))]
+    colnames(W_real) <- colnames(M_real)[seq_len(ncol(W_real))]
+
+    beta_true <- as.matrix(sim$beta_true)
+    true_assoc <- as.matrix(sim$true_assoc)
+
+    for (model_name in names(model_configs)) {
+      if (nrow(results) > 0) {
+        already_done <- any(results$scenario == scenario_name &
+                              results$replicate == rep_num &
+                              results$model == model_name)
+      } else {
+        already_done <- FALSE
+      }
+
+      if (already_done) {
+        cat("Skipping completed:", scenario_name, "rep", rep_num, model_name, "\n")
+        next
+      }
+
+      cfg <- model_configs[[model_name]]
+      group_vec <- if (cfg$use_group_layer) sim$group else rep(1, nrow(y_real))
+
+      cat("\n===", scenario_name, "| replicate", rep_num, "| model", model_name, "===\n")
+
+      fit_chains <- vector("list", mcmc_n_chains)
+      t0 <- Sys.time()
+
+      for (chain_i in seq_len(mcmc_n_chains)) {
+        fit_chains[[chain_i]] <- gibbs_sampler(
+          y = y_real,
+          M = M_real,
+          group = group_vec,
+          W = W_real,
+          delta = 0.8,
+          use_group_layer = cfg$use_group_layer,
+          use_network_layer = cfg$use_network_layer,
+          use_horseshoe_layer = cfg$use_horseshoe_layer,
+          n_iter = mcmc_n_iter,
+          burn_in = mcmc_burn_in,
+          thin = mcmc_thin,
+          verbose = 200,
+          seed = 100000 * rep_num + 1000 * which(names(model_configs) == model_name) + chain_i
+        )
+      }
+
+      elapsed_mins <- as.numeric(difftime(Sys.time(), t0, units = "mins"))
+
+      pair_scores <- make_pair_scores(
+        fit_chains = fit_chains,
+        beta_true = beta_true,
+        true_assoc = true_assoc,
+        scenario = scenario_name,
+        replicate = rep_num,
+        replicate_file = basename(sim_file),
+        model = model_name
+      )
+
+      metrics <- evaluate_metrics_from_pair_scores(pair_scores)
+      metrics$scenario <- scenario_name
+      metrics$replicate <- rep_num
+      metrics$replicate_file <- basename(sim_file)
+      metrics$model <- model_name
+      metrics$elapsed_mins <- elapsed_mins
+      metrics$n_iter <- mcmc_n_iter
+      metrics$burn_in <- mcmc_burn_in
+      metrics$thin <- mcmc_thin
+      metrics$n_chains <- mcmc_n_chains
+
+      results <- rbind(results, metrics)
+      write.csv(results, partial_file, row.names = FALSE)
+
+      if (save_pair_scores) {
+        score_dir <- file.path(results_dir, "pair_scores", scenario_name, model_name)
+        dir.create(score_dir, showWarnings = FALSE, recursive = TRUE)
+        score_file <- file.path(score_dir, paste0("pair_scores_", scenario_name,
+                                                  "_rep", sprintf("%03d", rep_num),
+                                                  "_", model_name, ".rds"))
+        saveRDS(pair_scores, score_file)
+      }
+
+      if (save_fits) {
+        fit_dir <- file.path(results_dir, "saved_fits", scenario_name, model_name)
+        dir.create(fit_dir, showWarnings = FALSE, recursive = TRUE)
+        fit_file <- file.path(fit_dir, paste0("fit_", scenario_name,
+                                              "_rep", sprintf("%03d", rep_num),
+                                              "_", model_name, ".rds"))
+        saveRDS(fit_chains, fit_file)
+      }
+
+      rm(fit_chains, pair_scores)
+      gc()
+    }
+  }
+
+  write.csv(results, final_file, row.names = FALSE)
+  invisible(results)
+}
+```
+
+Run one scenario at a time.
+
+```{r run-scenario-example, eval=FALSE}
+scenario_results <- run_one_scenario_simulation(
+  scenario_name = "scenario_2_network_structured",
+  base_dir = ".",
+  results_dir = "simulation_results",
+  model_configs = model_configs_nogroup,
+  max_reps = 100,
+  save_fits = FALSE,
+  save_pair_scores = TRUE
+)
+```
