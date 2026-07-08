@@ -38,19 +38,6 @@ network-structured horseshoe drug-response model (Section 4 of
    in the real data (see the project progress log's multicollinearity
    diagnostic) that could plausibly slow mixing for the genes involved.
 
-**Performance note:** an earlier version of this sampler took an
-estimated 13 hours for a full run (295 drugs x 4000 iterations) on the
-real data. Two optimizations -- precomputing the per-drug data crossproduct
-once instead of recomputing it every iteration, and using a single
-Cholesky factorization instead of a full matrix inverse followed by a
-second decomposition -- brought this down to roughly 45 minutes to 1.1
-hours at 1500--2000 iterations on real data dimensions (951 models, 219
-genes, 295 drugs), benchmarked directly rather than estimated. See the
-comments inside `gibbs_sampler()` below for exactly where and why. Running
-multiple chains (Part 3) multiplies this runtime by the number of chains,
-so plan accordingly -- see the MCMC Settings chunk in Part 3 for the
-exact numbers used.
-
 Run the chunks in order: Part 1 defines functions (fast), Part 2 runs a
 calibration check (a few minutes), Part 3 runs on real data (time depends
 on your iteration settings -- a short test setting is provided first),
@@ -59,29 +46,6 @@ Part 4 runs diagnostics on whatever Part 3 produced.
 ---
 
 # Part 1: Sampler Functions
-
-**Model correction note (read before using):** the original model
-specification gave both $\kappa_d^2$ (network smoothness) and $\zeta_d^2$
-(horseshoe global shrinkage) near-improper Inverse-Gamma(0.01, 0.01)
-priors directly. On real data, this caused both to collapse toward zero
-in a self-reinforcing feedback loop -- a known pathology for variance
-components in hierarchical models (Gelman 2006), worsened here because
-both parameters govern the *same* coefficient vector via the *same*
-distributional family, giving them no structural reason to disagree. The
-fix, adapted from the Group Inverse-Gamma Gamma (GIGG) prior (Boss,
-Datta, Wang, Park, Kang & Mukherjee 2021), breaks this symmetry: each
-global parameter's *precision* ($1/\kappa_d^2$, $1/\zeta_d^2$) is now
-drawn from a **Gamma** distribution instead, while the *local* horseshoe
-parameter $\lambda_{gd}$ keeps its original Inverse-Gamma structure --
-exactly the asymmetry GIGG prescribes between group-level and
-local-level shrinkage. This was verified analytically, confirmed
-numerically against a directly grid-evaluated posterior, and validated
-on real data: both parameters now stabilize at sensible values, genes
-with strong signal (e.g. TP53) recover well-behaved posteriors instead of
-collapsing to zero, and genuinely data-sparse genes (e.g. CAMTA1, 10 of
-951 cell lines mutated) correctly retain wide, honest uncertainty rather
-than an artificially tight or artificially unshrunk estimate. Full
-derivation and diagnostic trace are in the project progress log.
 
 ```{r libraries}
 suppressWarnings(suppressMessages({
