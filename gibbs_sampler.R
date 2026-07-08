@@ -14,36 +14,6 @@
 #
 # Every step below is a direct conjugate draw (Normal, Inverse-Gamma, or
 # Gamma); there is no Metropolis-Hastings step anywhere in this sampler.
-#
-# IMPORTANT MODEL CORRECTION (relative to the original pathway.tex
-# specification): kappa_d^2 and zeta_d^2 were originally BOTH given
-# near-improper Inverse-Gamma(0.01, 0.01) priors directly. On real data,
-# this caused both to collapse toward zero in a self-reinforcing feedback
-# loop -- a documented pathology for variance components in hierarchical
-# models (Gelman 2006, "Prior distributions for variance parameters in
-# hierarchical models") that is exacerbated here because BOTH parameters
-# govern the same coefficient vector beta_tilde via the same
-# (Inverse-Gamma) family, giving them no structural reason to disagree.
-# The fix, adapted from the Group Inverse-Gamma Gamma (GIGG) prior (Boss,
-# Datta, Wang, Park, Kang & Mukherjee 2021, "Group Inverse-Gamma Gamma
-# Shrinkage for Sparse Regression with Block-Correlated Predictors"),
-# breaks this symmetry: the precision of each GLOBAL/GROUP-level
-# parameter (1/kappa_d^2 for the network layer, 1/zeta_d^2 for the
-# horseshoe's global layer) is given a GAMMA prior instead, while the
-# LOCAL shrinkage parameter lambda_gd keeps its original Inverse-Gamma
-# (half-Cauchy-via-augmentation) structure -- exactly the asymmetry GIGG
-# prescribes between group-level and local-level shrinkage, which prevents
-# either global parameter from being dragged to zero by the other. This
-# was derived analytically, verified numerically against a directly
-# grid-evaluated posterior, and confirmed on real data: both kappa_d^2 and
-# zeta_d^2 now stabilize at sensible, non-degenerate values, and
-# previously-collapsed gene coefficients (e.g. TP53) recover sensible,
-# well-supported posteriors, while genuinely data-sparse genes (e.g.
-# CAMTA1, mutated in only 10 of 951 cell lines) correctly retain wide,
-# honest posterior uncertainty rather than being forced toward an
-# artificially tight or artificially unshrunk estimate. Full derivation
-# and real-data diagnostic trace are in the project progress log.
-#
 # This file defines the sampler as a set of functions, intended to be
 # sourced by a driver script (run_simulation_test.R or run_real_data.R)
 # rather than run directly.
