@@ -14,9 +14,6 @@
 #   Rscript real_data_group_layer_vs_target_storage.R nonetwork_group_vs_target
 #   Rscript real_data_group_layer_vs_target_storage.R nohorseshoe_group_vs_target
 #
-# Recommended manuscript run:
-#   Rscript real_data_group_layer_vs_target_storage.R full_group_vs_target
-#
 # Output files:
 #   gibbs_fits_full_group_vs_target.rds
 #   gibbs_fits_nonetwork_group_vs_target.rds
