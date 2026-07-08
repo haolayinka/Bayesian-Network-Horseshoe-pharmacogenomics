@@ -30,7 +30,7 @@ Code accompanying the manuscript:
 |------|-------------|
 | `kfold_cv_comparison.Rmd` | Five-fold cross-validated predictive log-likelihood comparison across all three model configurations (full, no-network, no-horseshoe). |
 | `network_misspecification_check.R` | Delta sensitivity analysis: reruns the model at delta in {0.5, 0.7, 0.8, 0.9} and compares flagged associations. |
-| `run_simulation_test.R` | Runs simulation study replicates under three data-generating scenarios. |
+| `simulation_code.Rmd` | Runs simulation study replicates under three data-generating scenarios. |
 
 ### Figures and Tables
 
