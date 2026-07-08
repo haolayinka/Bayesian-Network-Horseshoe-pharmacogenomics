@@ -29,14 +29,6 @@ actually improves out-of-sample prediction, not just in-sample fit.
 
 **Design notes -- read before running:**
 
-- **$k=3$ folds, not the more conventional $k=5$ or $k=10$.** Each fold
-  requires fitting all three models (full, no-network, no-horseshoe)
-  once, so total model fits = $3k$. At $k=5$ or $k=10$, even at reduced
-  chain settings, this becomes a multi-day commitment (estimated 24--48
-  hours at the ablation-comparison chain length); $k=3$ keeps this to a
-  single extended run (estimated below) while still giving each fold a
-  meaningfully large training set ($\sim$634 of 951 cell lines) and test
-  set ($\sim$317 cell lines).
 - **Folds are constructed at the cell-line level**, identically across
   all three models and re-used for every model, so the comparison is
   apples-to-apples: the same cell lines are held out for the same fold
@@ -95,7 +87,7 @@ for (i in seq_len(nrow(resp))) {
 }
 
 set.seed(2024)
-k_folds <- 3
+k_folds <- 5
 fold_assignment <- sample(rep(1:k_folds, length.out = n_models))
 cat("Fold sizes:", table(fold_assignment), "\n")
 cat("(Same fold assignment is reused for every model below, so the comparison is apples-to-apples.)\n")
