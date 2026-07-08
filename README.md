@@ -11,7 +11,7 @@ Code accompanying the manuscript:
 
 | File | Description |
 |------|-------------|
-| `gibbs_sampler.R` | Primary Gibbs sampler for Model I (shared-effect network-horseshoe model). Implements the GIGG-corrected conjugate updates for all parameters. |
+| `gibbs_sampler.R` | Primary Gibbs sampler for Model I (shared-effect network-horseshoe model). Implements the GIGG conjugate updates for all parameters. |
 | `gibbs_sampler_full_AB.Rmd` | RMarkdown version of the primary sampler with full inline documentation and derivations. |
 | `real_data_group_layer_vs_target_storage.R` | Gibbs sampler for Model II (tissue-group extension). Implements the group-specific coefficient updates with IG(2,0.5) prior on eta^2 and ridge stabilization. Minimum group size = 50. |
 
