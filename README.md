@@ -39,7 +39,7 @@ Code accompanying the manuscript:
 | `fig2_rmse_decomposed.R` | Generates Figure 2: RMSE decomposed into signal and null subsets across scenarios. |
 | `fig2_rmse_decomposed.py` | Python equivalent of Figure 2 script. |
 | `rmse_decomposition_table.Rmd` | Generates the RMSE decomposition table (requires pair_scores/ folder). |
-| `simulation_plots.Rmd` | Generates simulation study figures (Figures 1 and 3). |
+| `simulation_plots.Rmd` | Generates simulation study figures. |
 
 ---
 
