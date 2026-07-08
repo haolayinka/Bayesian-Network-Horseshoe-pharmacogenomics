@@ -65,7 +65,7 @@ KEGG pathway data: https://www.genome.jp/kegg
 
 2. **Adjacency matrix:** Always use `gene_adjacency_W.csv` (gene-level, 135 nodes). Do not use pathway-level adjacency.
 
-3. **Group layer minimum size:** Set MIN_GROUP_SIZE = 50 in `real_data_group_layer_v2.R`. Groups below this threshold are merged into "Other".
+3. **Group layer minimum size:** Set MIN_GROUP_SIZE = 50 in `real_data_group_layer_vs_target_storage.R`. Groups below this threshold are merged into "Other".
 
 4. **MCMC settings:** 4,000 iterations, 1,000 burn-in, thinning = 2, 2 chains per model configuration.
 
