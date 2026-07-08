@@ -67,7 +67,7 @@ KEGG pathway data: https://www.genome.jp/kegg
 
 3. **Group layer minimum size:** Set MIN_GROUP_SIZE = 50 in `real_data_group_layer_vs_target_storage.R`. Groups below this threshold are merged into "Other".
 
-4. **MCMC settings:** 4,000 iterations, 1,000 burn-in, thinning = 2, 2 chains per model configuration.
+4. **MCMC settings:** 5,000 iterations, 1,000 burn-in, thinning = 2, 2 chains per model configuration.
 
 ---
 
