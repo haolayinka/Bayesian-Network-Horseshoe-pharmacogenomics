@@ -52,10 +52,10 @@ The following data files are required and should be placed in the working direct
 - `model_groups.csv` — tissue-of-origin annotations with columns: model_id, tissue
 - `gene_adjacency_W.csv` — 135-gene pathway adjacency matrix (derived from KEGG)
 - `pathway_gene_membership.csv` — KEGG pathway gene membership (used to construct adjacency)
-
-GDSC2 data: https://www.cancerrxgene.org
-PRISM data: https://depmap.org/portal
-KEGG pathway data: https://www.genome.jp/kegg
+  
+  GDSC2 data: https://www.cancerrxgene.org  
+  PRISM data: https://depmap.org/portal  
+  KEGG pathway data: https://www.genome.jp/kegg  
 
 ---
 
