@@ -17,12 +17,12 @@ Code accompanying the manuscript:
 
 ### Real Data Analysis
 
-| File                                          | Description                                                                   |
-| --------------------------------------------- | ----------------------------------------------------------------------------- |
-| `inspect_real_results.R`                    | Extracts and summarises primary GDSC2 results from Model I fit objects.       |
-| `scan_tissue_effects.R` | Extracts and summarises tissue-group results from Model II fit objects (K=6). |
-| `inspect_prism_results.R`                   | Extracts and summarises PRISM/DepMap replication results.                     |
-| `prism_pipeline.R`                          | Preprocesses PRISM data for compatibility with the model framework.           |
+| File                        | Description                                                                   |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `inspect_real_results.R`  | Extracts and summarises primary GDSC2 results from Model I fit objects.       |
+| `scan_tissue_effects.R`   | Extracts and summarises tissue-group results from Model II fit objects (K=6). |
+| `inspect_prism_results.R` | Extracts and summarises PRISM/DepMap replication results.                     |
+| `prism_pipeline.R`        | Preprocesses PRISM data for compatibility with the model framework.           |
 
 ### Validation and Sensitivity
 
@@ -69,7 +69,7 @@ KEGG pathway data: https://www.genome.jp/kegg
    ```
    ```
 
-    2, 2 chains per model configuration.
+   2, 2 chains per model configuration.
 
 ---
 
