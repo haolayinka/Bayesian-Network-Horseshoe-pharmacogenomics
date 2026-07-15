@@ -61,15 +61,10 @@ The following data files are required and should be placed in the working direct
 
 ## Key Implementation Notes
 
-1. **GIGG:** Both global variance components (kappa^2, zeta^2) are parameterized through their precisions with Gamma(1,1) priors. Do NOT revert to IG(0.01,0.01) on the variances directly — this causes both to collapse to zero.
-2. **Adjacency matrix:** Always use `gene_adjacency_W.csv` (gene-level, 135 nodes). Do not use pathway-level adjacency.
+1. **GIGG:** Both global variance components (kappa^2, zeta^2) are parameterized through their precisions with Gamma(1,1) priors. Do NOT use IG(0.01,0.01) on the variances directly — this causes both to collapse to zero.
+2. **Adjacency matrix:** Always use `gene_adjacency_W.csv` (gene-level, 135 nodes).
 3. **Group layer minimum size:** Set MIN_GROUP_SIZE = 50 in `real_group_layer.R`. Groups below this threshold are merged into "Other".
-4. **MCMC settings:** 5,000 iterations, 1,000 burn-in, thinning =
-
-   ```
-   ```
-
-   2, 2 chains per model configuration.
+4. **MCMC settings:** 5,000 iterations, 1,000 burn-in, thinning = 2, 2 chains per model configuration.
 
 ---
 
